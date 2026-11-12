@@ -5,6 +5,7 @@ import type {
   AccountInfo,
   Activity,
   AgentDetail,
+  AgentAutonomy,
   AgentInfo,
   AgentStats,
   AgentStatus,
@@ -158,7 +159,7 @@ export interface CommitResult {
   notices: Notice[];
 }
 
-type NoticeKind = 'arrive' | 'room' | 'wait' | 'deliver' | 'done' | 'leave' | 'shell' | 'shellDone' | 'github' | 'character';
+type NoticeKind = 'arrive' | 'room' | 'wait' | 'deliver' | 'done' | 'leave' | 'shell' | 'shellDone' | 'github' | 'character' | 'autonomy';
 
 /** Pergunta ainda sem resposta (o balão dela já diz que o agente espera você). */
 function isOpenQuestion(a: Activity | undefined): boolean {
@@ -657,6 +658,18 @@ export class Office {
     rec.info.statusSince = this.now();
     delete rec.removeAt;
     this.markDirty();
+  }
+
+  /** Estado do modo autônomo de um agente (undefined = desligado), com um aviso opcional. */
+  setAutonomy(id: string, autonomy: AgentAutonomy | undefined, notice?: { level: NoticeLevel; text: string }): void {
+    const info = this.agents.get(id)?.info;
+    if (!info) return;
+    if (JSON.stringify(info.autonomy) !== JSON.stringify(autonomy)) {
+      if (autonomy) info.autonomy = autonomy;
+      else delete info.autonomy;
+      this.markDirty();
+    }
+    if (notice) this.notice('autonomy', id, notice.level, notice.text, info.roomId, { dedupeKey: `${id}|autonomy|${notice.text}` });
   }
 
   isSubDone(id: string): boolean {

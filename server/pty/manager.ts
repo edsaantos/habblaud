@@ -226,6 +226,12 @@ export class PtyManager {
     return this.spawn(this.plan(p, this.takeovers.size));
   }
 
+  /** Sessão nova que já começa com um pedido (modo autônomo): `claude [--permission-mode <modo>] -- <prompt>`. */
+  createWithPrompt(p: { cwd: string; account?: string; prompt: string; permissionMode?: string }): PtyInfo {
+    const args = [...(p.permissionMode ? ['--permission-mode', p.permissionMode] : []), '--', p.prompt];
+    return this.spawn(this.plan(p, this.takeovers.size), { args });
+  }
+
   /**
    * Encerra um agente principal. Aberto aqui: fecha o pty. Aberto noutro terminal: encerra o processo, mas só
    * se o registro de sessões da conta confirmar que aquele PID é aquela sessão do Claude Code (e o processo vivo
@@ -392,7 +398,7 @@ export class PtyManager {
     return { cwd, account, cols: clampInt(p.cols, 20, 400, 100), rows: clampInt(p.rows, 5, 200, 30) };
   }
 
-  private spawn(plan: SpawnPlan, p: { resume?: string; from?: string } = {}): PtyInfo {
+  private spawn(plan: SpawnPlan, p: { resume?: string; from?: string; args?: string[] } = {}): PtyInfo {
     const spawn = this.opts.spawn;
     if (!spawn) throw new PtyError(503, tr('terminal desligado: {0}', [this.opts.disabledReason ?? tr('indisponível')]));
     const { cwd, account, cols, rows } = plan;
@@ -403,7 +409,7 @@ export class PtyManager {
 
     let proc: PtyProcess;
     try {
-      const args = p.resume ? ['--resume', p.resume] : [];
+      const args = p.resume ? ['--resume', p.resume] : (p.args ?? []);
       proc = spawn(this.opts.claudeBin, args, { cwd, cols, rows, env });
     } catch (err) {
       throw new PtyError(500, tr('não consegui abrir o Claude Code: {0}', [errMsg(err)]));

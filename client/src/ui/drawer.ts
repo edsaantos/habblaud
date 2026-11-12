@@ -75,6 +75,22 @@ function section(title: string, ...children: (Node | null)[]): { el: HTMLElement
   return { el, title: t, extra };
 }
 
+/** Situação do modo autônomo de um agente, numa linha. */
+export function autonomyLine(a: AgentInfo): string {
+  const m = a.autonomy;
+  if (!m) return tr('Desligado.');
+  const context = tr('contexto em {0} de {1}', [formatTokens(a.stats.contextTokens ?? 0), formatTokens(m.threshold)]);
+  const phase = {
+    armed: () => tr('Ligado: {0}.', [context]),
+    asked: () => tr('Pediu o prompt de continuidade; esperando a resposta do agente.'),
+    cleaning: () => tr('Pediu para encerrar o que roda em segundo plano.'),
+    done: () => tr('Passou o trabalho para uma sessão nova. Esta ficou parada.'),
+    paused: () => tr('Parado: {0}. Desligue e ligue para tentar de novo.', [m.note ?? '']),
+  }[m.phase]();
+  const note = m.phase === 'armed' && m.note ? ` ${m.note}.` : '';
+  return m.relays ? `${phase}${note} ${tr('Revezamentos desta cadeia: {0}.', [m.relays])}` : phase + note;
+}
+
 const MEDIA_LABEL: Record<MediaKind, () => string> = { image: () => tr('imagem'), video: () => tr('vídeo'), audio: () => tr('áudio'), pdf: () => 'PDF' };
 
 /**
@@ -277,6 +293,9 @@ class AgentView {
   private tasksSec: ReturnType<typeof section>;
   private tasksBar: HTMLElement;
   private tasks: KeyedList<TaskItem>;
+  private autoSec: ReturnType<typeof section>;
+  private autoState: HTMLElement;
+  private autoBtn: HTMLButtonElement;
   private filesSec: ReturnType<typeof section>;
   private filesBody: HTMLElement;
   private filesBtn: HTMLButtonElement;
@@ -414,6 +433,19 @@ class AgentView {
     this.timelineSec = section(tr('Linha do tempo'), tl, h('div', { class: 'ui-timeline__more' }, this.timelineMore, this.timelineLess));
     this.timeline = new KeyedList<Activity>(tl, { key: (a) => a.id, create: createTimelineItem, update: (li, a) => updateTimelineItem(li, a, ctx.now()) });
 
+    // Modo autônomo: revezamento de sessões quando o contexto fica grande (server/autonomy/relay.ts).
+    this.autoState = h('p', { class: 'ui-small' });
+    this.autoBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', on: { click: () => this.toggleAutonomy() } }) as HTMLButtonElement;
+    this.autoSec = section(
+      tr('Modo autônomo'),
+      h('p', {
+        class: 'ui-muted ui-small',
+        text: tr('Quando o contexto da sessão passa do limite, o Habblaud pede ao agente o prompt de continuidade e abre uma sessão nova nesta pasta. Atenção: manda mensagens e abre sessões sozinho, gastando tokens sem você por perto.'),
+      }),
+      this.autoState,
+      this.autoBtn,
+    );
+
     // Arquivos: só busca quando pedem (o servidor relê o transcript da sessão e dos subagentes).
     this.filesBody = h('div', { class: 'ui-files' });
     this.filesBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: tr('Mostrar'), on: { click: () => this.loadFiles() } }) as HTMLButtonElement;
@@ -426,6 +458,7 @@ class AgentView {
       ['tools', tr('Chamadas de ferramenta')],
       ['tokensIn', tr('Tokens de entrada')],
       ['tokensOut', tr('Tokens de saída')],
+      ['context', tr('Contexto atual')],
       ['cost', tr('Custo estimado')],
       ['lines', tr('Linhas'), h('span', { class: 'ui-lines' }, this.linesPlus, this.linesMinus)],
       ['subs', tr('Subagentes disparados')],
@@ -460,6 +493,7 @@ class AgentView {
       this.tasksSec.el,
       this.teamSec.el,
       this.timelineSec.el,
+      this.autoSec.el,
       this.filesSec.el,
       statsSec.el,
       this.codexHint,
@@ -485,6 +519,16 @@ class AgentView {
     this.filesBody.replaceChildren();
     setText(this.filesBtn, tr('Mostrar'));
     this.loadHistory();
+  }
+
+  private toggleAutonomy(): void {
+    const a = this.last;
+    if (!a) return;
+    this.autoBtn.disabled = true;
+    void this.ctx.store.setAutonomy(a.id, !a.autonomy).then((error) => {
+      this.autoBtn.disabled = false;
+      if (error) setText(this.autoState, error);
+    });
   }
 
   /** Mostra a lista (buscando de novo, então também atualiza) ou recolhe a que está aberta. */
@@ -686,6 +730,12 @@ class AgentView {
     setText(this.tasksSec.extra, `${tp.completed}/${tp.total}`);
     this.tasks.sync(a.tasks);
 
+    // Modo autônomo: só principais do Claude Code, com as mensagens e o terminal interativo ligados e pelo computador.
+    const meta = this.ctx.store.snapshot?.meta;
+    setHidden(this.autoSec.el, this.ctx.store.mock || a.kind !== 'main' || a.provider === 'codex' || !meta?.messages || !meta.pty?.enabled || access().remote);
+    setText(this.autoBtn, a.autonomy ? tr('Desligar') : tr('Ligar'));
+    if (!this.autoBtn.disabled) setText(this.autoState, autonomyLine(a));
+
     // Arquivos: mesma trava do terminal (mostra caminhos de fora do projeto).
     setHidden(this.filesSec.el, this.ctx.store.mock || !this.ctx.store.snapshot?.meta.terminal || !access().terminal);
 
@@ -795,6 +845,7 @@ class AgentView {
     st.set('tools', formatInt(s.toolCalls));
     st.set('tokensIn', formatTokens(s.tokensIn));
     st.set('tokensOut', formatTokens(s.tokensOut));
+    st.set('context', s.contextTokens ? formatTokens(s.contextTokens) : null);
     st.set('cost', s.costUSD !== undefined ? formatUSD(s.costUSD) : null);
     const codex = providerOf(a) === 'codex';
     const hasLines = s.linesAdded !== undefined || s.linesRemoved !== undefined;
@@ -816,7 +867,7 @@ class AgentView {
   }
 }
 
-type StatKey = 'tools' | 'tokensIn' | 'tokensOut' | 'cost' | 'lines' | 'subs' | 'model' | 'branch' | 'perm' | 'session' | 'start' | 'duration' | 'bg';
+type StatKey = 'tools' | 'tokensIn' | 'tokensOut' | 'context' |'cost' | 'lines' | 'subs' | 'model' | 'branch' | 'perm' | 'session' | 'start' | 'duration' | 'bg';
 
 /** Lista chave/valor de linhas fixas: cada linha é criada uma vez e só tem o texto/visibilidade atualizados. */
 class KvList<K extends string> {

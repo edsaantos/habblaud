@@ -388,6 +388,10 @@ class LineParser {
     const tin = n(r.input_tokens) + n(r.cache_read_input_tokens) + n(r.cache_creation_input_tokens);
     const tout = n(r.output_tokens);
     const s = this.s;
+    if (tin && s.stats.contextTokens !== tin) {
+      s.stats.contextTokens = tin;
+      this.changed();
+    }
     if (s.skipUsage?.has(msgId)) return;
     if (s.firstMsgIds && s.firstMsgIds.size < FIRST_MSG_IDS && !s.usageByMsg.has(msgId)) s.firstMsgIds.add(msgId);
     // Linhas da mesma mensagem repetem o uso (às vezes parcial): conta só o acréscimo.

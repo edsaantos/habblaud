@@ -12,6 +12,14 @@ do meio (0.**3**.0).
 
 ### Adicionado
 
+- **Modo autônomo: revezamento de sessões quando o contexto fica grande.** Ligado por agente principal na gaveta
+  (seção **Modo autônomo**). Quando o contexto da sessão passa do limite (`HABBLAUD_AUTONOMO_TOKENS`, padrão 150 mil
+  tokens), o Habblaud manda uma mensagem pedindo para concluir o que está em andamento, encerrar subagentes e
+  processos em segundo plano e devolver o prompt de continuidade; depois abre uma sessão nova na mesma pasta com esse
+  prompt, já com o modo ligado. A sessão antiga fica aberta e parada. Para sozinho depois de
+  `HABBLAUD_AUTONOMO_MAX` revezamentos seguidos (padrão 3), se algo continuar rodando em segundo plano ou se o agente
+  não responder em 30 minutos. Precisa das mensagens (plugin habblaud-mensagens) e de `HABBLAUD_PTY=1`.
+- **Contexto atual** nas estatísticas do agente: o tamanho do contexto da sessão, que é o que encarece cada turno.
 - **Arquivos do agente na gaveta de detalhes.** A seção **Arquivos** lista a mídia (imagem, vídeo, áudio, PDF)
   gravada durante a sessão e as pastas acessadas fora do repositório (leitura, escrita ou comando), somando os
   subagentes da sessão, em duas listas recolhíveis. Clique num item para abri-lo no computador (a pasta no
