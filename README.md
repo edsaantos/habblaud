@@ -11,6 +11,10 @@
 
 <p align="center"><b>English</b> · <a href="README.pt-BR.md">Português</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a></p>
 
+> **Fork notice:** this repository is a personal fork of [marmottajr/habblaud](https://github.com/marmottajr/habblaud),
+> with adjustments for personal use. All credit for Habblaud goes to its original author,
+> [@marmottajr](https://github.com/marmottajr). For the official version, issues and releases, use the original repository.
+
 <p align="center">
   <img alt="Node.js 22.12+" src="https://img.shields.io/badge/node-%E2%89%A522.12-5fa04e?logo=node.js&logoColor=white" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-7-3178c6?logo=typescript&logoColor=white" />
