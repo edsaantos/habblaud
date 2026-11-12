@@ -255,6 +255,22 @@ describe('ClaudeWatcher', () => {
     expect(c.agent('sess-a:b1')!.status).toBe('done');
   });
 
+  it('colega de equipe (teammate_spawned): o resultado imediato do Agent não o conclui', () => {
+    bootWithSession();
+    appendLines(c.transcript('sess-a'), [
+      L.assistant([L.tool('toolu_t', 'Agent', { description: 'Lado Rust', subagent_type: 'core', name: 'core-44' })]),
+      L.result('toolu_t', 'Spawned successfully.', { toolUseResult: { status: 'teammate_spawned', agentId: 'acore-44-29a6' } }),
+    ]);
+    c.subFile('sess-a', 'acore-44-29a6', { agentType: 'core-44', description: 'Lado Rust', requestShape: 'background' }, [
+      L.prompt('Faça o lado Rust', { agentId: 'acore-44-29a6' }),
+      L.assistant([L.tool('r1', 'Read', { file_path: '/p/a.rs' })], { agentId: 'acore-44-29a6' }),
+    ]);
+    c.poll();
+    c.advance(2_000);
+    c.poll();
+    expect(c.agent('sess-a:acore-44-29a6')).toMatchObject({ status: 'working', background: true });
+  });
+
   it('fork em segundo plano: entra e trabalha (a cópia da chamada do pai não o conclui); a notificação conclui', () => {
     const mainId = bootWithSession();
     appendLines(c.transcript('sess-a'), [
@@ -296,15 +312,30 @@ describe('ClaudeWatcher', () => {
     expect(c.agent('sess-a:fk2')).toMatchObject({ status: 'working' });
   });
 
-  it('subagente conclui por end_turn + 5 s de silêncio', () => {
+  it('subagente fica ocioso com end_turn + 5 s de silêncio, volta ao escrever e sai depois de 5 min sem trabalho', () => {
     bootWithSession();
-    c.subFile('sess-a', 'e1', { agentType: 'Plan', description: 'Planejar', toolUseId: 'toolu_x' }, [
+    const path = c.subFile('sess-a', 'e1', { agentType: 'Plan', description: 'Planejar', toolUseId: 'toolu_x' }, [
       L.prompt('Planeje', { agentId: 'e1' }),
       L.assistant([L.text('Plano pronto.')], { agentId: 'e1', stop: 'end_turn' }),
     ]);
     c.poll();
     expect(c.agent('sess-a:e1')!.status).toBe('working');
     c.advance(6_000);
+    c.poll();
+    expect(c.agent('sess-a:e1')!.status).toBe('idle');
+    // o relógio do teste anda sozinho: a escrita nova leva o mtime para o "agora" dele
+    const write = (lines: string[]) => {
+      appendLines(path, lines);
+      utimesSync(path, c.now() / 1000, c.now() / 1000);
+    };
+    write([L.prompt('Mais uma coisa', { agentId: 'e1' })]);
+    c.poll();
+    expect(c.agent('sess-a:e1')!.status).toBe('working');
+    write([L.assistant([L.text('Feito.')], { agentId: 'e1', stop: 'end_turn' })]);
+    c.advance(6_000);
+    c.poll();
+    expect(c.agent('sess-a:e1')!.status).toBe('idle');
+    c.advance(300_000);
     c.poll();
     expect(c.agent('sess-a:e1')!.status).toBe('done');
   });

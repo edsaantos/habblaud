@@ -87,6 +87,7 @@ export class SettingsPopover implements UiComponent {
   private switches = new Map<BoolPref | 'demo', SwitchRefs>();
   private bubbles: ReturnType<typeof segmented<UiPrefs['bubbles']>>;
   private liveliness: ReturnType<typeof segmented<UiPrefs['liveliness']>>;
+  private maxSubs: ReturnType<typeof segmented<UiPrefs['maxSubs']>>;
   private daylight: ReturnType<typeof segmented<UiPrefs['daylight']>>;
   private theme: ReturnType<typeof segmented<UiPrefs['theme']>>;
   private language: ReturnType<typeof segmented<LanguageChoice>>;
@@ -131,6 +132,12 @@ export class SettingsPopover implements UiComponent {
       ],
       (v) => ctx.updatePrefs({ liveliness: v }),
     );
+    this.maxSubs = segmented<UiPrefs['maxSubs']>(
+      tr('Subagentes visíveis por sala'),
+      [['5', '5'], ['10', '10'], ['15', '15'], ['20', '20'], ['all', tr('Todos')]],
+      (v) => ctx.updatePrefs({ maxSubs: v }),
+    );
+    this.maxSubs.row.append(h('span', { class: 'ui-set__hint', text: tr('Acima do teto, os subagentes continuam na lista lateral, sem personagem na sala.') }));
     this.daylight = segmented<UiPrefs['daylight']>(
       tr('Ciclo dia/noite'),
       [
@@ -204,6 +211,7 @@ export class SettingsPopover implements UiComponent {
         sw('showNames', tr('Mostrar nomes'), tr('Etiqueta com o nome acima de cada personagem.'), flip('showNames')),
         this.bubbles.row,
         this.liveliness.row,
+        this.maxSubs.row,
         this.daylight.row,
       ),
       h(
@@ -283,6 +291,7 @@ export class SettingsPopover implements UiComponent {
     }
     this.bubbles.set(p.bubbles);
     this.liveliness.set(p.liveliness);
+    this.maxSubs.set(p.maxSubs);
     this.daylight.set(p.daylight);
     this.theme.set(p.theme);
     this.language.set(savedLanguage());

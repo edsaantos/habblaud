@@ -22,8 +22,10 @@ export interface SubagentMeta {
   workflowPhase?: string;
 }
 
-/** Sem escrita há 5 s depois de um end_turn: concluiu. */
+/** Sem escrita há 5 s depois de um end_turn: fica ocioso (sem trabalho no momento). */
 export const END_TURN_QUIET_MS = 5_000;
+/** Ocioso há 5 min: vai embora (volta se receber trabalho de novo). */
+export const REST_LEAVE_MS = 300_000;
 /** Sem escrita há 120 s: concluiu (ou travou). */
 export const IDLE_TIMEOUT_MS = 120_000;
 /** Com uma ferramenta em andamento (ex.: comando longo), espera mais antes de desistir. */
@@ -144,9 +146,14 @@ export interface IdleCheck {
   pendingTool: boolean;
 }
 
-/** Conclusão por inatividade: end_turn + 5 s de silêncio, ou silêncio prolongado. */
+/** Sem trabalho no momento: end_turn + 5 s de silêncio. Fica no escritório, ocioso, até REST_LEAVE_MS. */
+export function resting(c: IdleCheck): boolean {
+  return c.ended && !c.pendingTool && c.now - c.lastWriteAt >= END_TURN_QUIET_MS;
+}
+
+/** Conclusão por inatividade: 5 min ocioso depois de um end_turn, ou silêncio prolongado no meio do trabalho. */
 export function concludedByIdle(c: IdleCheck): boolean {
   const quiet = c.now - c.lastWriteAt;
-  if (c.ended && !c.pendingTool && quiet >= END_TURN_QUIET_MS) return true;
+  if (c.ended && !c.pendingTool) return quiet >= REST_LEAVE_MS;
   return quiet >= (c.pendingTool ? PENDING_TOOL_TIMEOUT_MS : IDLE_TIMEOUT_MS);
 }

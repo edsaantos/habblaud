@@ -218,6 +218,9 @@ export class Sim {
       if (a.kind === 'sub' && a.parentId) {
         const parent = this.chars.get(a.parentId);
         if (parent && (parent.leaving || parent.gone)) continue;
+        // sala no teto de subagentes: este fica só na lista lateral (entra quando abrir vaga)
+        const max = this.options().maxSubs ?? 0;
+        if (max > 0 && this.subsIn(a.roomId) >= max) continue;
       }
       const nc = this.spawn(a, first, now);
       if (nc) {
@@ -243,6 +246,12 @@ export class Sim {
     this.refreshRoomInfo();
     // visita: na entrada, as luzes já como o prédio está (apagado entra escuro, sem a luz se apagando)
     if (this.visit) this.applyVisitLight(now, first);
+  }
+
+  private subsIn(roomId: string): number {
+    let n = 0;
+    for (const c of this.chars.values()) if (c.info.kind === 'sub' && c.roomId === roomId && !c.leaving) n++;
+    return n;
   }
 
   /** Reaplica o último snapshot (depuração). */

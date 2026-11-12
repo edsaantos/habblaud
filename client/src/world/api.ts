@@ -19,6 +19,8 @@ export interface WorldOptions {
   daylight?: DaylightMode;
   /** Tema visual: automático (segue o calendário; ver seasonalThemeFor), nenhum, Natal ou Halloween. */
   theme?: OfficeTheme;
+  /** (Opcional, aditivo) Teto de subagentes visíveis por sala; 0 ou ausente = sem teto. Os demais ficam só na lista. */
+  maxSubs?: number;
 }
 
 /** Tema que o renderer desenha: o escritório original ('none') ou um dos sazonais. */

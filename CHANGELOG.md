@@ -10,6 +10,23 @@ do meio (0.**3**.0).
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Teto de subagentes visíveis por sala** em Configurações › Escritório (5, 10, 15, 20 ou todos; padrão 10). Acima
+  do teto, o subagente continua na lista lateral e entra na sala quando abrir vaga.
+
+### Alterado
+
+- **Subagente sem trabalho fica 5 minutos no escritório antes de ir embora.** Ao terminar o turno ele fica ocioso
+  (passeia, toma café) e volta à mesa se receber trabalho; antes saía após 5 segundos de silêncio. Quem entrega o
+  resultado ao agente principal continua saindo na hora.
+
+### Corrigido
+
+- **Colegas de equipe (subagentes com nome) voltam a aparecer no escritório.** O resultado imediato do `Agent`
+  ("Spawned successfully") era lido como término, e o personagem nunca entrava. Agora ele entra, trabalha e sai
+  quando fica em silêncio, como os demais subagentes.
+
 ## [1.0.3] - 2026-10-16
 
 ### Corrigido
