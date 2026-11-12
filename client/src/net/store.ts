@@ -182,6 +182,16 @@ export class OfficeStore {
     return res?.ok ? ((await res.json()) as TouchedFiles) : null;
   }
 
+  /** Abre no computador (gerenciador de arquivos ou programa padrão) um item da lista de arquivos do agente. */
+  async openAgentFile(id: string, path: string): Promise<boolean> {
+    const res = await fetch(`/api/agents/${encodeURIComponent(id)}/files/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    }).catch(() => null);
+    return !!res?.ok;
+  }
+
   /** Liga/desliga os agentes de demonstração no servidor. */
   async setDemo(enabled: boolean): Promise<boolean> {
     if (this.mock) return true;

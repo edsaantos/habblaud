@@ -1,6 +1,7 @@
 // Arquivos de um agente, lidos sob demanda do transcript dele (e dos subagentes da sessão):
 // mídia criada ou alterada durante a sessão e pastas acessadas fora do repositório.
 // Só local (GET /api/agents/:id/files, com a trava do terminal); nada daqui vai ao Habblaud World.
+import { execFile } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -142,6 +143,21 @@ export function summarize(touches: readonly Touch[], sessionStart: number): Touc
     media: [...media.values()].sort((a, b) => b.at - a.at).slice(0, MAX_ITEMS),
     outside: [...dirs.values()].sort((a, b) => Number(b.write) - Number(a.write) || b.count - a.count).slice(0, MAX_ITEMS),
   };
+}
+
+/**
+ * Abre a pasta no gerenciador de arquivos, ou a mídia no programa padrão. Só para caminhos que estão na lista
+ * do agente (quem chama confere): abrir um arquivo qualquer seria executar o que o agente escreveu.
+ */
+export function openInSystem(path: string): void {
+  const bin = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  // sem shell; o explorer.exe devolve código 1 mesmo quando abre
+  execFile(bin, [path], { windowsHide: true }, () => undefined);
+}
+
+/** O caminho é um item da lista (mídia ou pasta de fora)? */
+export function listed(files: TouchedFiles, path: string): boolean {
+  return files.media.some((m) => m.path === path) || files.outside.some((d) => d.path === path);
 }
 
 interface Parsed {

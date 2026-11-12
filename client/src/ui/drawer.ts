@@ -77,21 +77,29 @@ function section(title: string, ...children: (Node | null)[]): { el: HTMLElement
 
 const MEDIA_LABEL: Record<MediaKind, () => string> = { image: () => tr('imagem'), video: () => tr('vídeo'), audio: () => tr('áudio'), pdf: () => 'PDF' };
 
-/** Lista de mídia gravada e de pastas fora do repositório (o caminho completo fica na dica e copia no clique). */
-function filesView(f: TouchedFiles | null): HTMLElement[] {
+/**
+ * Duas listas recolhíveis, cada uma com a sua rolagem: mídia gravada e pastas fora do repositório.
+ * O clique abre o item no computador (`open`); o caminho completo fica na dica e no botão de copiar.
+ */
+function filesView(f: TouchedFiles | null, open: (path: string) => void): HTMLElement[] {
   const note = (text: string) => h('p', { class: 'ui-muted ui-small', text });
   if (!f) return [note(tr('Não foi possível ler os arquivos deste agente.'))];
   const item = (label: string, meta: string, path: string) =>
-    h('li', { title: path, on: { click: () => void copyText(path) } }, h('span', { class: 'ui-mono-inline', text: label }), h('span', { class: 'ui-muted ui-small', text: ` · ${meta}` }));
+    h(
+      'li',
+      {},
+      h('button', { class: 'ui-files__open', type: 'button', title: tr('Abrir no computador: {0}', [path]), on: { click: () => open(path) } }, h('span', { class: 'ui-mono-inline', text: label }), h('span', { class: 'ui-muted ui-small', text: ` · ${meta}` })),
+      copyButton(() => path, tr('Copiar caminho')),
+    );
+  const group = (title: string, items: HTMLElement[], empty: string) =>
+    h('details', { class: 'ui-files__group', attrs: { open: '' } }, h('summary', { text: title }), items.length ? h('ul', { class: 'ui-files__list' }, ...items) : note(empty));
   const media = f.media.map((m) => item(m.name, [MEDIA_LABEL[m.kind](), formatSize(m.size), m.created ? tr('criado') : tr('alterado')].join(' · '), m.path));
   const dirs = f.outside.map((d) =>
     item(d.path, [d.write && tr('escrita'), d.read && tr('leitura'), d.command && tr('comando')].filter(Boolean).join(', '), d.path),
   );
   return [
-    h('h4', { class: 'ui-small', text: tr('Mídia gravada ({0})', [media.length]) }),
-    media.length ? h('ul', { class: 'ui-files__list' }, ...media) : note(tr('Nenhuma mídia gravada nesta sessão.')),
-    h('h4', { class: 'ui-small', text: tr('Pastas fora do repositório ({0})', [dirs.length]) }),
-    dirs.length ? h('ul', { class: 'ui-files__list' }, ...dirs) : note(tr('Nada acessado fora do repositório.')),
+    group(tr('Mídia gravada ({0})', [media.length]), media, tr('Nenhuma mídia gravada nesta sessão.')),
+    group(tr('Pastas fora do repositório ({0})', [dirs.length]), dirs, tr('Nada acessado fora do repositório.')),
   ];
 }
 
@@ -479,14 +487,20 @@ class AgentView {
     this.loadHistory();
   }
 
+  /** Mostra a lista (buscando de novo, então também atualiza) ou recolhe a que está aberta. */
   private loadFiles(): void {
+    if (this.filesBody.childElementCount) {
+      this.filesBody.replaceChildren();
+      setText(this.filesBtn, tr('Mostrar'));
+      return;
+    }
     const id = this.id;
     this.filesBtn.disabled = true;
     void this.ctx.store.agentFiles(id).then((f) => {
       this.filesBtn.disabled = false;
       if (id !== this.id) return;
-      setText(this.filesBtn, tr('Atualizar'));
-      this.filesBody.replaceChildren(...filesView(f));
+      setText(this.filesBtn, tr('Recolher'));
+      this.filesBody.replaceChildren(...filesView(f, (path) => void this.ctx.store.openAgentFile(id, path)));
     });
   }
 

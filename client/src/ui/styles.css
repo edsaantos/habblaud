@@ -11159,3 +11159,38 @@ html.is-replay #world {
   overflow-wrap: anywhere;
   cursor: copy;
 }
+.ui-files__group {
+  margin-bottom: 8px;
+}
+.ui-files__group > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.ui-files__group .ui-files__list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.ui-files__list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+.ui-files__open {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.ui-files__open:hover,
+.ui-files__open:focus-visible {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}

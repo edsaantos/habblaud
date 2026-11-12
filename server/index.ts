@@ -50,7 +50,7 @@ import { DictationService } from './dictation/dictation';
 import { createWhisperTranscriber, findWhisper } from './dictation/whisper';
 import { DeliveryIndex } from './deliveries/deliveries';
 import { FileFetcher } from './deliveries/fetcher';
-import { touchedFiles } from './files/touched';
+import { listed, openInSystem, touchedFiles } from './files/touched';
 import { WorldClient } from './world/client';
 import { createWorldRoutes } from './world/http';
 import { WorldService } from './world/service';
@@ -213,6 +213,11 @@ const deliveries = history
       agentName: (id) => office.list().find((a) => a.id === id)?.name,
     })
   : undefined;
+/** Arquivos de um agente presente (no principal, com os subagentes da sessão). */
+const touchedOf = async (id: string) => {
+  const path = agents.transcriptPathOf(id);
+  return path ? touchedFiles(path, office.get(id)?.kind === 'main') : undefined;
+};
 const deliveryFiles = deliveries
   ? new FileFetcher({
       direct: !config.inDocker,
@@ -365,12 +370,17 @@ const api = createApiHandler({
   dictation,
   deliveries,
   files: deliveryFiles,
-  touched: config.terminal
-    ? async (id) => {
-        const path = agents.transcriptPathOf(id);
-        return path ? touchedFiles(path, office.get(id)?.kind === 'main') : undefined;
-      }
-    : undefined,
+  touched: config.terminal ? touchedOf : undefined,
+  // No Docker o servidor não enxerga a área de trabalho do computador: não há o que abrir.
+  openTouched:
+    config.terminal && !config.inDocker
+      ? async (id, path) => {
+          const files = await touchedOf(id);
+          if (!files || !listed(files, path)) return false;
+          openInSystem(path);
+          return true;
+        }
+      : undefined,
   spawnFolders: async () => {
     const snap = hub.current();
     const last = new Map<string, number>();
