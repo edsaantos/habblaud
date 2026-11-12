@@ -388,7 +388,8 @@ um **chip colorido com a letra da conta** (C, D…).
   [Atualizar](#atualizar)).
 - **Painel lateral:** busca, filtro por conta e a lista de salas com seus agentes e subagentes.
 - **Gaveta de detalhes:** clique num personagem (no prédio ou na lista) para ver atividade, tarefas, subagentes,
-  linha do tempo e estatísticas (ferramentas, tokens, custo, linhas alteradas, modelo, branch).
+  linha do tempo e estatísticas (ferramentas, tokens, custo, linhas alteradas, modelo, branch). Em **Arquivos**,
+  a mídia gravada na sessão e as pastas acessadas fora do repositório (só no próprio computador).
 - **Feed:** as últimas atividades de todo o escritório.
 - **Configurações (⚙):** nomes, balões, quanto os ociosos passeiam, ciclo dia/noite, sons, notificações do navegador,
   modo demonstração e **Sobre** (versão em uso e versão nova). **Ajuda (?):** legenda completa e atalhos.

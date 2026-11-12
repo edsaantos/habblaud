@@ -12,6 +12,10 @@ do meio (0.**3**.0).
 
 ### Adicionado
 
+- **Arquivos do agente na gaveta de detalhes.** A seção **Arquivos** lista a mídia (imagem, vídeo, áudio, PDF)
+  gravada durante a sessão e as pastas acessadas fora do repositório (leitura, escrita ou comando), somando os
+  subagentes da sessão, em duas listas recolhíveis. Clique num item para abri-lo no computador (a pasta no
+  gerenciador de arquivos, a mídia no programa padrão) ou use o botão de copiar o caminho. Só no próprio computador.
 - **Teto de subagentes visíveis por sala** em Configurações › Escritório (5, 10, 15, 20 ou todos; padrão 10). Acima
   do teto, o subagente continua na lista lateral e entra na sala quando abrir vaga.
 

@@ -1,7 +1,7 @@
 // Rotas da API (/api/*). Respostas JSON; rotas desconhecidas -> 404 JSON.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { NAME_MAX, parseAppearanceParts, parseCharacterName, parseSeed } from '../../shared/appearance';
-import type { AccessInfo, AgentInfo, ModSummary, OfficeSnapshot, SourceInfo, UpdateStatus } from '../../shared/types';
+import type { AccessInfo, AgentInfo, ModSummary, OfficeSnapshot, SourceInfo, TouchedFiles, UpdateStatus } from '../../shared/types';
 import type { AccountsService } from '../accounts/service';
 import { handleCodexEvent } from '../codex/http';
 import type { DayStatsService } from '../history/daystats';
@@ -75,6 +75,10 @@ export interface ApiDeps {
   deliveries?: DeliveryIndex;
   /** Quem lê os arquivos das entregas (e, para o auxiliar do host, /api/host/files/*; deliveries/fetcher.ts). */
   files?: FileFetcher;
+  /** Arquivos de um agente (GET /api/agents/:id/files; files/touched.ts). Undefined = agente sem transcript. */
+  touched?: (agentId: string) => Promise<TouchedFiles | undefined>;
+  /** Abre no computador um item dessa lista (POST /api/agents/:id/files/open {path}). False = não está na lista. */
+  openTouched?: (agentId: string, path: string) => Promise<boolean>;
   /** Renomeia a sala (POST /api/rooms/rename {id, name}; vazio volta ao padrão). Devolve o nome em uso, ou undefined se a sala não existe. */
   renameRoom?: (id: string, name: string) => string | undefined;
   /** Estatísticas do "Meu dia" (GET /api/stats, http/stats.ts). */
@@ -645,6 +649,22 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       }
       return true;
     }
+    if (path.startsWith('/api/agents/') && path.endsWith('/files/open')) {
+      // Abre no computador um item da lista de arquivos do agente: nunca pela porta remota.
+      if (method !== 'POST') methodNotAllowed(res, 'POST');
+      else if (!deps.openTouched || !trusted(req)) sendJson(res, 403, { error: denied(req, tr('os arquivos do agente só abrem pelo próprio computador (http://localhost)')) });
+      else
+        readJson(req)
+          .then(async (body) => {
+            const target = (body as { path?: unknown })?.path;
+            if (typeof target !== 'string') throw new HttpError(400, tr('esperado {path}'));
+            const id = decodeURIComponent(path.slice('/api/agents/'.length, -'/files/open'.length));
+            if (!(await deps.openTouched!(id, target))) throw new HttpError(404, tr('item fora da lista de arquivos do agente: atualize a lista'));
+            sendJson(res, 200, { ok: true });
+          })
+          .catch((err) => fail(res, err));
+      return true;
+    }
     if (path.startsWith('/api/agents/')) {
       if (!isRead) {
         methodNotAllowed(res, 'GET');
@@ -655,6 +675,16 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
         id = decodeURIComponent(path.slice('/api/agents/'.length));
       } catch {
         sendJson(res, 400, { error: tr('id inválido') });
+        return true;
+      }
+      if (id.endsWith('/files')) {
+        // Mostra caminhos de fora do projeto: a mesma trava do terminal.
+        if (!deps.touched || !trusted(req, 'terminal')) sendJson(res, 403, { error: denied(req, tr('os arquivos do agente só abrem pelo próprio computador (http://localhost)')) });
+        else
+          deps.touched(id.slice(0, -'/files'.length)).then(
+            (files) => (files ? sendJson(res, 200, files) : sendJson(res, 404, { error: tr('agente não encontrado') })),
+            (err) => fail(res, err),
+          );
         return true;
       }
       const detail = office.detail(id);
