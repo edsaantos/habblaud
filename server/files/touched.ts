@@ -2,9 +2,9 @@
 // mídia criada ou alterada durante a sessão e pastas acessadas fora do repositório.
 // Só local (GET /api/agents/:id/files, com a trava do terminal); nada daqui vai ao Habblaud World.
 import { execFile } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { MediaKind, TouchedFiles } from '../../shared/types';
 import { listSubagentFiles, sessionDirOf } from '../sources/subagents';
@@ -19,6 +19,9 @@ const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const DIR_TOOLS = new Set(['Glob', 'Grep', 'LS']);
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell', 'Monitor']);
 const MAX_ITEMS = 200;
+/** Varredura das pastas citadas em comandos: níveis abaixo da pasta e teto de entradas lidas por consulta. */
+const SCAN_DEPTH = 3;
+const SCAN_ENTRIES = 5_000;
 
 type Op = 'read' | 'write' | 'command';
 
@@ -122,13 +125,38 @@ export function summarize(touches: readonly Touch[], sessionStart: number): Touc
     }
     return stats.get(p) ?? null;
   };
-  for (const t of touches) {
-    const kind = MEDIA[extname(t.path).toLowerCase()];
-    const st = kind || t.guess || t.dir ? stat(t.path) : null;
-    // mídia: existe e foi gravada depois do início da sessão (ler uma imagem antiga não conta)
-    if (kind && st?.isFile() && Number(st.mtimeMs) >= sessionStart && !media.has(t.path)) {
-      media.set(t.path, { path: t.path, name: basename(t.path), kind, size: Number(st.size), at: Number(st.mtimeMs), created: Number(st.birthtimeMs) >= sessionStart });
+  // mídia: existe e foi gravada depois do início da sessão (ler uma imagem antiga não conta)
+  const addMedia = (path: string) => {
+    const kind = MEDIA[extname(path).toLowerCase()];
+    const st = kind && !media.has(path) ? stat(path) : null;
+    if (kind && st?.isFile() && Number(st.mtimeMs) >= sessionStart) {
+      media.set(path, { path, name: basename(path), kind, size: Number(st.size), at: Number(st.mtimeMs), created: Number(st.birthtimeMs) >= sessionStart });
     }
+  };
+  const scanned = new Set<string>();
+  let budget = SCAN_ENTRIES;
+  // Pasta citada num comando ou gravada: o programa costuma receber só a pasta de saída, então a mídia nova
+  // dentro dela (até SCAN_DEPTH níveis) também conta. A raiz do repositório e o que a contém ficam de fora.
+  const scan = (dir: string, depth: number) => {
+    if (scanned.has(dir) || budget <= 0) return;
+    scanned.add(dir);
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (--budget <= 0) return;
+      if (e.isFile()) addMedia(join(dir, e.name));
+      else if (e.isDirectory() && depth < SCAN_DEPTH && !e.name.startsWith('.') && e.name !== 'node_modules') scan(join(dir, e.name), depth + 1);
+    }
+  };
+  for (const t of touches) {
+    const st = extname(t.path).toLowerCase() in MEDIA || t.guess || t.dir ? stat(t.path) : null;
+    addMedia(t.path);
+    const broad = [repoRoot(t.cwd), homedir(), tmpdir()].some((p) => !outside(p, t.path)); // contém o repositório, a pasta do usuário ou a temporária
+    if (st?.isDirectory() && t.op !== 'read' && !broad) scan(t.path, 0);
     if (t.guess && !st) continue;
     if (!outside(t.path, repoRoot(t.cwd))) continue;
     // o `path` do Grep pode ser um arquivo: aí vale a pasta dele
@@ -152,7 +180,8 @@ export function summarize(touches: readonly Touch[], sessionStart: number): Touc
 export function openInSystem(path: string): void {
   const bin = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
   // sem shell; o explorer.exe devolve código 1 mesmo quando abre
-  execFile(bin, [path], { windowsHide: true }, () => undefined);
+  // (sem windowsHide: com ele a janela da pasta abre escondida)
+  execFile(bin, [path], () => undefined);
 }
 
 /** O caminho é um item da lista (mídia ou pasta de fora)? */
