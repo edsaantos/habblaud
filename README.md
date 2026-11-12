@@ -390,7 +390,8 @@ a **colored chip with the account letter** (C, D…).
   [Updating](#updating)).
 - **Side panel:** search, account filter and the list of rooms with their agents and subagents.
 - **Details drawer:** click a character (in the building or in the list) to see activity, tasks, subagents,
-  timeline and stats (tools, tokens, cost, lines changed, model, branch).
+  timeline and stats (tools, tokens, cost, lines changed, model, branch). Under **Files**, the media written in
+  the session and the folders accessed outside the repository (only from the computer itself).
 - **Feed:** the latest activity across the whole office.
 - **Settings (⚙):** names, bubbles, how much idle agents wander around, day/night cycle, sounds, browser notifications,
   demo mode and **About** (version in use and new version). **Help (?):** full legend and shortcuts.

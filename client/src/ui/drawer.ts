@@ -1,6 +1,7 @@
 // Gaveta de detalhes (direita): agente ou sala selecionados. Agente do Codex: selo "Codex", textos dele (onde
 // responder, o terminal, a aprovação no lugar do modo de permissão, sem custo) e a dica dos hooks do Codex.
-import type { Activity, AgentInfo, FeedItem, RoomInfo, ShellJob, TaskItem } from '../../../shared/types';
+import type { Activity, AgentInfo, FeedItem, MediaKind, RoomInfo, ShellJob, TaskItem, TouchedFiles } from '../../../shared/types';
+import { formatSize } from './history';
 import { roomTheme } from '../art';
 import { createAvatarPlaceholder, updateAvatar } from './avatar';
 import { CharacterEditor } from './character-editor';
@@ -72,6 +73,26 @@ function section(title: string, ...children: (Node | null)[]): { el: HTMLElement
   const extra = h('span', { class: 'ui-sec__extra' });
   const el = h('section', { class: 'ui-sec' }, h('div', { class: 'ui-sec__head' }, t, extra), ...children.filter((c): c is Node => !!c));
   return { el, title: t, extra };
+}
+
+const MEDIA_LABEL: Record<MediaKind, () => string> = { image: () => tr('imagem'), video: () => tr('vídeo'), audio: () => tr('áudio'), pdf: () => 'PDF' };
+
+/** Lista de mídia gravada e de pastas fora do repositório (o caminho completo fica na dica e copia no clique). */
+function filesView(f: TouchedFiles | null): HTMLElement[] {
+  const note = (text: string) => h('p', { class: 'ui-muted ui-small', text });
+  if (!f) return [note(tr('Não foi possível ler os arquivos deste agente.'))];
+  const item = (label: string, meta: string, path: string) =>
+    h('li', { title: path, on: { click: () => void copyText(path) } }, h('span', { class: 'ui-mono-inline', text: label }), h('span', { class: 'ui-muted ui-small', text: ` · ${meta}` }));
+  const media = f.media.map((m) => item(m.name, [MEDIA_LABEL[m.kind](), formatSize(m.size), m.created ? tr('criado') : tr('alterado')].join(' · '), m.path));
+  const dirs = f.outside.map((d) =>
+    item(d.path, [d.write && tr('escrita'), d.read && tr('leitura'), d.command && tr('comando')].filter(Boolean).join(', '), d.path),
+  );
+  return [
+    h('h4', { class: 'ui-small', text: tr('Mídia gravada ({0})', [media.length]) }),
+    media.length ? h('ul', { class: 'ui-files__list' }, ...media) : note(tr('Nenhuma mídia gravada nesta sessão.')),
+    h('h4', { class: 'ui-small', text: tr('Pastas fora do repositório ({0})', [dirs.length]) }),
+    dirs.length ? h('ul', { class: 'ui-files__list' }, ...dirs) : note(tr('Nada acessado fora do repositório.')),
+  ];
 }
 
 function copyButton(getText: () => string, label: string): HTMLButtonElement {
@@ -248,6 +269,9 @@ class AgentView {
   private tasksSec: ReturnType<typeof section>;
   private tasksBar: HTMLElement;
   private tasks: KeyedList<TaskItem>;
+  private filesSec: ReturnType<typeof section>;
+  private filesBody: HTMLElement;
+  private filesBtn: HTMLButtonElement;
   private teamSec: ReturnType<typeof section>;
   private team: KeyedList<AgentInfo>;
   private teamEmpty: HTMLElement;
@@ -382,6 +406,11 @@ class AgentView {
     this.timelineSec = section(tr('Linha do tempo'), tl, h('div', { class: 'ui-timeline__more' }, this.timelineMore, this.timelineLess));
     this.timeline = new KeyedList<Activity>(tl, { key: (a) => a.id, create: createTimelineItem, update: (li, a) => updateTimelineItem(li, a, ctx.now()) });
 
+    // Arquivos: só busca quando pedem (o servidor relê o transcript da sessão e dos subagentes).
+    this.filesBody = h('div', { class: 'ui-files' });
+    this.filesBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: tr('Mostrar'), on: { click: () => this.loadFiles() } }) as HTMLButtonElement;
+    this.filesSec = section(tr('Arquivos'), h('p', { class: 'ui-muted ui-small', text: tr('Mídia gravada na sessão e pastas acessadas fora do repositório.') }), this.filesBody, this.filesBtn);
+
     this.sessionValue = h('span', { class: 'ui-mono-inline' });
     this.linesPlus = h('span', { class: 'ui-plus' });
     this.linesMinus = h('span', { class: 'ui-minus' });
@@ -423,6 +452,7 @@ class AgentView {
       this.tasksSec.el,
       this.teamSec.el,
       this.timelineSec.el,
+      this.filesSec.el,
       statsSec.el,
       this.codexHint,
     );
@@ -444,7 +474,20 @@ class AgentView {
     this.team.clear();
     this.shells.clear();
     this.actDetails.open = false;
+    this.filesBody.replaceChildren();
+    setText(this.filesBtn, tr('Mostrar'));
     this.loadHistory();
+  }
+
+  private loadFiles(): void {
+    const id = this.id;
+    this.filesBtn.disabled = true;
+    void this.ctx.store.agentFiles(id).then((f) => {
+      this.filesBtn.disabled = false;
+      if (id !== this.id) return;
+      setText(this.filesBtn, tr('Atualizar'));
+      this.filesBody.replaceChildren(...filesView(f));
+    });
   }
 
   /** Histórico longo do agente (o pedido mais recente vale; ver historyGen). */
@@ -628,6 +671,9 @@ class AgentView {
     updateProgress(this.tasksBar, tp.completed, tp.total, tp.inProgress);
     setText(this.tasksSec.extra, `${tp.completed}/${tp.total}`);
     this.tasks.sync(a.tasks);
+
+    // Arquivos: mesma trava do terminal (mostra caminhos de fora do projeto).
+    setHidden(this.filesSec.el, this.ctx.store.mock || !this.ctx.store.snapshot?.meta.terminal || !access().terminal);
 
     // Equipe: subagentes (principal) ou responsável (sub).
     if (a.kind === 'main') {

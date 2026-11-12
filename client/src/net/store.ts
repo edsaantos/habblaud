@@ -5,7 +5,7 @@
 // Também cuida da reconexão: quando o navegador desiste do stream (EventSource fechado após erro HTTP,
 // ex.: servidor reiniciando atrás de um proxy), tenta de novo com espera crescente.
 import type { AppearanceParts } from '../../../shared/appearance';
-import type { Activity, AgentDetail, AgentInfo, FeedItem, Notice, OfficeSnapshot, OutboxMessage, PermissionDecision, PermissionRequestInfo, RoomInfo } from '../../../shared/types';
+import type { Activity, AgentDetail, AgentInfo, FeedItem, Notice, OfficeSnapshot, OutboxMessage, PermissionDecision, PermissionRequestInfo, RoomInfo, TouchedFiles } from '../../../shared/types';
 import { DemoSimulator } from '../../../shared/demo/simulator';
 import { tr } from '../../../shared/i18n';
 
@@ -173,6 +173,13 @@ export class OfficeStore {
     if (!res.ok) return this.agent(id)?.recent ?? [];
     const detail = (await res.json()) as AgentDetail;
     return detail.history;
+  }
+
+  /** Arquivos da sessão de um agente (mídia gravada e pastas fora do repositório). Null = indisponível. */
+  async agentFiles(id: string): Promise<TouchedFiles | null> {
+    if (this.mock || this.replay) return null;
+    const res = await fetch(`/api/agents/${encodeURIComponent(id)}/files`).catch(() => null);
+    return res?.ok ? ((await res.json()) as TouchedFiles) : null;
   }
 
   /** Liga/desliga os agentes de demonstração no servidor. */

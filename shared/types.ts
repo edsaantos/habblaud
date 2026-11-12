@@ -437,6 +437,19 @@ export interface AgentDetail {
   history: Activity[];
 }
 
+export type MediaKind = 'image' | 'video' | 'audio' | 'pdf';
+
+/**
+ * Resposta de GET /api/agents/:id/files (mesma trava do terminal): arquivos da sessão, lidos das chamadas de
+ * ferramenta do transcript. No agente principal, soma os subagentes da sessão. Nada disto vai ao Habblaud World.
+ */
+export interface TouchedFiles {
+  /** Mídia gravada durante a sessão, da mais recente para a mais antiga. */
+  media: { path: string; name: string; kind: MediaKind; size: number; at: number; /** Criada na sessão (senão, alterada). */ created: boolean }[];
+  /** Pastas fora do repositório: lidas, escritas ou citadas em comandos (`count` = quantas vezes). */
+  outside: { path: string; read: boolean; write: boolean; command: boolean; count: number }[];
+}
+
 // ------------------------------------------------------------------ mod do Claude Code
 
 /**

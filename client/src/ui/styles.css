@@ -11147,3 +11147,15 @@ html.is-replay #world {
 .ui-world-chip__visitors[hidden] {
   display: none;
 }
+
+/* Gaveta › Arquivos: mídia gravada e pastas fora do repositório (clique copia o caminho). */
+.ui-files__list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.ui-files__list li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+  cursor: copy;
+}

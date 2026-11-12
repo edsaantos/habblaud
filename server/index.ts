@@ -50,6 +50,7 @@ import { DictationService } from './dictation/dictation';
 import { createWhisperTranscriber, findWhisper } from './dictation/whisper';
 import { DeliveryIndex } from './deliveries/deliveries';
 import { FileFetcher } from './deliveries/fetcher';
+import { touchedFiles } from './files/touched';
 import { WorldClient } from './world/client';
 import { createWorldRoutes } from './world/http';
 import { WorldService } from './world/service';
@@ -364,6 +365,12 @@ const api = createApiHandler({
   dictation,
   deliveries,
   files: deliveryFiles,
+  touched: config.terminal
+    ? async (id) => {
+        const path = agents.transcriptPathOf(id);
+        return path ? touchedFiles(path, office.get(id)?.kind === 'main') : undefined;
+      }
+    : undefined,
   spawnFolders: async () => {
     const snap = hub.current();
     const last = new Map<string, number>();
