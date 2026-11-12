@@ -625,7 +625,8 @@ class LineParser {
     if (isSpawn) {
       const agentId = str(tur.agentId);
       const runId = str(tur.runId);
-      if (tur.status === 'async_launched' || tur.isAsync === true) {
+      // 'teammate_spawned': colega de equipe (Agent com `name`); o resultado volta na hora e ele segue trabalhando.
+      if (tur.status === 'async_launched' || tur.status === 'teammate_spawned' || tur.isAsync === true) {
         const sig: TranscriptSignal = { type: 'launched', toolUseId: id };
         if (agentId) sig.agentId = agentId;
         if (runId) sig.runId = runId;

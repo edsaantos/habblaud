@@ -596,6 +596,8 @@ export const FR: Readonly<Record<string, string>> = {
   "Todos": "Toutes",
   "Importantes": "Importantes",
   "Movimento pelo escritório": "Mouvement dans le bureau",
+  "Subagentes visíveis por sala": "Sous-agents visibles par salle",
+  "Acima do teto, os subagentes continuam na lista lateral, sem personagem na sala.": "Au-delà de la limite, les sous-agents restent dans la liste latérale, sans personnage dans la salle.",
   "Calmo": "Calme",
   "Normal": "Normal",
   "Agitado": "Animé",

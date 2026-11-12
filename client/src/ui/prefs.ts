@@ -10,6 +10,8 @@ export interface UiPrefs {
   showNames: boolean;
   bubbles: WorldOptions['bubbles'];
   liveliness: WorldOptions['liveliness'];
+  /** Teto de subagentes visíveis por sala ('all' = sem teto). */
+  maxSubs: '5' | '10' | '15' | '20' | 'all';
   /** Ciclo dia/noite: automático (hora local), sempre dia ou sempre noite. */
   daylight: DaylightMode;
   theme: NonNullable<WorldOptions['theme']>;
@@ -31,6 +33,7 @@ export const DEFAULT_PREFS: UiPrefs = {
   showNames: DEFAULT_WORLD_OPTIONS.showNames,
   bubbles: DEFAULT_WORLD_OPTIONS.bubbles,
   liveliness: DEFAULT_WORLD_OPTIONS.liveliness,
+  maxSubs: '10',
   daylight: 'auto',
   theme: 'auto',
   sound: false,
@@ -56,6 +59,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     showNames: bool(o.showNames, d.showNames),
     bubbles: oneOf(o.bubbles, ['all', 'important', 'none'] as const, d.bubbles),
     liveliness: oneOf(o.liveliness, ['calm', 'normal', 'lively'] as const, d.liveliness),
+    maxSubs: oneOf(o.maxSubs, ['5', '10', '15', '20', 'all'] as const, d.maxSubs),
     // preferências antigas: o interruptor "dia e noite" desligado vira "sempre dia"
     daylight: oneOf(o.daylight, ['auto', 'day', 'night'] as const, o.dayNight === false ? 'day' : d.daylight),
     theme: oneOf(o.theme, ['auto', 'none', 'christmas', 'halloween'] as const, d.theme),
@@ -90,7 +94,7 @@ export function savePrefs(storage: StorageLike | null, prefs: UiPrefs): void {
 
 /** Parte das preferências que o mundo (canvas) consome. */
 export function worldOptionsFrom(p: UiPrefs): Partial<WorldOptions> {
-  return { showNames: p.showNames, bubbles: p.bubbles, liveliness: p.liveliness, dayNight: p.daylight !== 'day', daylight: p.daylight, theme: p.theme };
+  return { showNames: p.showNames, bubbles: p.bubbles, liveliness: p.liveliness, dayNight: p.daylight !== 'day', daylight: p.daylight, theme: p.theme, maxSubs: p.maxSubs === 'all' ? 0 : Number(p.maxSubs) };
 }
 
 /** localStorage com proteção contra navegadores que lançam exceção ao acessá-lo. */

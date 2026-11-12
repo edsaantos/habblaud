@@ -197,6 +197,18 @@ describe('simulação do escritório', () => {
     expect(sim.rooms.get('/a')!.lightOn).toBe(true);
   });
 
+  it('teto de subagentes por sala: acima dele não entra; abriu vaga, entra', () => {
+    const sim = new Sim(art, () => ({ ...DEFAULT_WORLD_OPTIONS, liveliness: 'calm', maxSubs: 2 }));
+    const rooms = [room('/a', 0)];
+    const main = agent('ana', '/a', 'working');
+    const subs = [1, 2, 3].map((i) => agent(`ana:s${i}`, '/a', 'working', { kind: 'sub', parentId: 'ana' }));
+    sim.applySnapshot(snap(rooms, [main, ...subs]), T0);
+    expect([...sim.chars.keys()]).toEqual(['ana', 'ana:s1', 'ana:s2']);
+    sim.chars.get('ana:s1')!.leaving = true;
+    sim.applySnapshot(snap(rooms, [main, ...subs], 2), T0);
+    expect(sim.chars.has('ana:s3')).toBe(true);
+  });
+
   it('subagente entrega o resultado ao pai e vai embora', () => {
     const sim = newSim();
     const clock = { now: T0 };

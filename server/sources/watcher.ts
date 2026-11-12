@@ -19,6 +19,8 @@ import type { AgentSource } from './source';
 import {
   BOOT_RECENT_MS,
   concludedByIdle,
+  resting,
+  type IdleCheck,
   PENDING_TOOL_TIMEOUT_MS,
   listSubagentFiles,
   parseJournal,
@@ -826,13 +828,17 @@ export class ClaudeWatcher implements AgentSource {
         }
         continue;
       }
-      const done =
-        this.isFinished(t, sub.file, sub.meta) ||
-        concludedByIdle({ now, lastWriteAt: sub.tail.mtimeMs, ended: sub.state.ended, pendingTool: sub.state.pendingTools.size > 0 });
-      if (done) {
-        office.completeSub(sub.id);
+      const idle: IdleCheck = { now, lastWriteAt: sub.tail.mtimeMs, ended: sub.state.ended, pendingTool: sub.state.pendingTools.size > 0 };
+      const finished = this.isFinished(t, sub.file, sub.meta);
+      if (finished || concludedByIdle(idle)) {
+        // Saiu por ficar 5 min sem trabalho: não é uma entrega, vai embora sem aviso.
+        office.completeSub(sub.id, { notify: finished });
         // Concluiu: nada dele roda em primeiro plano (o que estiver em segundo plano passa para o principal).
         t.shells.endForeground(sub.id, now);
+      } else if (resting(idle)) {
+        office.restSub(sub.id);
+      } else {
+        office.reactivateSub(sub.id);
       }
     }
   }

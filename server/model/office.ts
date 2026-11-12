@@ -638,10 +638,19 @@ export class Office {
     this.markDirty();
   }
 
-  /** Subagente concluído voltou a escrever (ex.: recebeu nova mensagem): volta ao trabalho. */
+  /** Subagente sem trabalho no momento (terminou o turno): fica ocioso no escritório até sair. */
+  restSub(id: string): void {
+    const rec = this.agents.get(id);
+    if (!rec || rec.info.kind !== 'sub' || rec.info.status !== 'working') return;
+    rec.info.status = 'idle';
+    rec.info.statusSince = this.now();
+    this.markDirty();
+  }
+
+  /** Subagente ocioso ou concluído voltou a escrever (ex.: recebeu nova mensagem): volta ao trabalho. */
   reactivateSub(id: string): void {
     const rec = this.agents.get(id);
-    if (!rec || rec.info.kind !== 'sub' || rec.info.status !== 'done') return;
+    if (!rec || rec.info.kind !== 'sub' || (rec.info.status !== 'done' && rec.info.status !== 'idle')) return;
     const parent = rec.info.parentId ? this.agents.get(rec.info.parentId) : undefined;
     if (!parent || parent.info.status === 'offline') return;
     rec.info.status = 'working';

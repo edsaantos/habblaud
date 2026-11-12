@@ -370,6 +370,7 @@ desinstaladores antigos deixam cópias `settings.json.habblaud-backup-<data>` na
 | **Esperando o shell** | Terminou o turno mas deixou um comando rodando (testes, build, deploy…), então fica na mesa com uma ampulheta virando sobre a cabeça e o terminal em progresso: come pipoca assistindo, depois de 3 min cruza os braços e gira na cadeira, depois de 10 min junta teia de aranha e depois de 25 min cochila; quando o comando termina, levanta e comemora com confete (ou ganha uma nuvem de chuva, se falhou). Depois de 40 s, se houver colegas à toa, pode sair para uma roda — com a ampulheta na cabeça. |
 | **Ocioso** | Terminou o turno e passeia: café na copa, bebedouro, banheiro, sofá do lounge, celular no puff, espelho. Com colegas à toa, entra numa roda: TV, videogame, ping-pong, papo na copa, jokenpô (veja [Vida social](#vida-social)). Depois de 10 min parado, cochila — mas um colega pode acordá-lo para uma roda. |
 | **Subagente concluído** | Vai até o agente que o chamou, entrega o resultado e sai pelo elevador. |
+| **Subagente sem trabalho** | Fica ocioso no escritório e volta à mesa se receber trabalho; depois de 5 minutos, vai embora. O teto de subagentes visíveis por sala fica em **Configurações › Escritório**. |
 | **Sessão encerrada** | Vai embora; se era o último da sala, apaga a luz antes de sair. |
 
 Cada personagem tem um **nome brasileiro único** (Marina, Henrique, Luan…) que se mantém enquanto a sessão existir, e
