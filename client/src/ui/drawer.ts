@@ -157,7 +157,7 @@ function copyButton(getText: () => string, label: string): HTMLButtonElement {
 }
 
 const TASK_MARK: Record<TaskItem['status'], string> = { completed: '✓', in_progress: '◐', pending: '○' };
-const TASK_STATE: Record<TaskItem['status'], string> = { completed: tr('concluída'), in_progress: tr('em andamento'), pending: 'pendente' };
+const TASK_STATE: Record<TaskItem['status'], string> = { completed: tr('concluída'), in_progress: tr('em andamento'), pending: tr('pendente') };
 
 function createTaskItem(): HTMLElement {
   return h('li', { class: 'ui-task' }, h('span', { class: 'ui-task__mark', attrs: { 'aria-hidden': 'true' } }), h('span', { class: 'ui-task__text' }), h('span', { class: 'ui-task__owner' }));
@@ -798,7 +798,7 @@ class AgentView {
     setText(this.actText, act?.text ?? activityFallback(a));
     // A duração só entra quando o texto ainda não a traz ("Concluiu em 33s" já diz quanto levou).
     const showDuration = !!act?.durationMs && act.kind !== 'done' && !/\d\s?(?:ms|s|min|h)\b/.test(act.text);
-    setText(this.actTime, act ? `${relativeTime(act.at, now)}${showDuration ? ` · levou ${formatDuration(act.durationMs!)}` : ''}` : '');
+    setText(this.actTime, act ? `${relativeTime(act.at, now)}${showDuration ? tr(' · levou {0}', [formatDuration(act.durationMs!)]) : ''}` : '');
     this.actText.classList.toggle('is-error', !!act?.error);
     const detail = act?.detail ?? '';
     setHidden(this.actDetails, !detail);

@@ -70,6 +70,14 @@ do meio (0.**3**.0).
   ficou offline.
 - **Modo demonstração só liga pelo próprio computador.** Com `HABBLAUD_HOST=0.0.0.0`, outro aparelho da rede
   conseguia ligar ou desligar a demonstração.
+- **Cartão de permissão: o pedido seguinte não chega com os botões já ativos.** Com vários pedidos na fila, o
+  cartão trocava para o próximo no mesmo instante em que o anterior era respondido, e um clique mirado no primeiro
+  podia aprovar o segundo sem leitura. Os botões agora ficam parados por 0,7 s depois da troca.
+- **Terminal interativo: avisa quando a conexão cai.** Se o Habblaud reinicia ou o terminal some, a tela mostra
+  "[conexão perdida: feche e abra o terminal de novo]" e para de aceitar teclas, em vez de parecer viva enquanto o
+  que você digita se perde. Ao trocar de terminal, as teclas ainda não enviadas não vão mais para o outro.
+- **Textos que ficavam em português nas outras línguas:** o estado "pendente" da tarefa, "levou 3 s", "em 5 min",
+  "2 de 5" (barra de progresso, sessões e subagentes) e "Ana em sala-x" agora saem em inglês, espanhol e francês.
 - **Novo agente no Windows: o atalho de abrir o app do Claude leva o pedido.** Quando o `claude --bg` não conseguia
   abrir o agente, o link do app era cortado no primeiro `&`: o app abria sem o pedido e a página mostrava falha.
 - **Modo autônomo: só vale como prompt de continuidade o texto entre as marcas daquele pedido.** Cada pedido agora

@@ -71,7 +71,7 @@ export function updateProgress(bar: HTMLElement, done: number, total: number, pa
   setStyleVar(bar, '--p', `${pct}%`);
   setStyleVar(bar, '--pp', `${partialPct}%`);
   setAttr(bar, 'aria-valuenow', String(pct));
-  setAttr(bar, 'aria-valuetext', `${done} de ${total}`);
+  setAttr(bar, 'aria-valuetext', tr('{0} de {1}', [done, total]));
   bar.classList.toggle('is-complete', total > 0 && done === total);
 }
 

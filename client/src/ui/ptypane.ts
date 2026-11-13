@@ -72,12 +72,21 @@ export class PtyPane {
       es.close();
       this.onExit();
     });
+    // O navegador desistiu do fluxo (o servidor reiniciou ou o terminal sumiu): avisa, em vez de a tela parecer viva
+    // enquanto as teclas se perdem. Com o servidor só fora do ar, o EventSource segue tentando e não chega aqui.
+    es.addEventListener('error', () => {
+      if (es.readyState !== EventSource.CLOSED || this.es !== es || this.exited) return;
+      this.exited = true;
+      this.term.write(`\r\n\x1b[2m[${tr('conexão perdida: feche e abra o terminal de novo')}]\x1b[0m\r\n`);
+      this.onExit();
+    });
   }
 
   detach(): void {
     this.es?.close();
     this.es = null;
     this.id = null;
+    this.pending = ''; // o que não foi enviado era do terminal anterior
   }
 
   focus(): void {
@@ -101,7 +110,8 @@ export class PtyPane {
     this.pending += data;
     const id = this.id;
     this.sending = this.sending.then(async () => {
-      if (!this.pending) return;
+      // id !== this.id: a tela já é de outro terminal, e o que está em `pending` foi digitado para ele
+      if (!this.pending || id !== this.id) return;
       const chunk = this.pending;
       this.pending = '';
       await postPty(`/api/pty/${encodeURIComponent(id)}/input`, { data: chunk }).catch(() => undefined);
