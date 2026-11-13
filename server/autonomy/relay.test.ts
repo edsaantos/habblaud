@@ -62,7 +62,12 @@ function setup(maxRelays = 3, dir?: string) {
     agents.find((a) => a.id === id)!.statusSince = clock;
     relay.tick();
   };
-  return { relay, agents, sent, launched, view, notices, ctx, answer, advance: (ms: number) => (clock += ms) };
+  /** O texto entre as marcas que o pedido deu (a marca de cada pedido tem um id aleatório). */
+  const mark = (text: string) => {
+    const tag = /<(continuidade[\w-]*)>/.exec(sent[0] ?? '')?.[1] ?? 'continuidade';
+    return `<${tag}>${text}</${tag}>`;
+  };
+  return { relay, agents, sent, launched, view, notices, ctx, answer, mark, advance: (ms: number) => (clock += ms) };
 }
 
 describe('modo autônomo', () => {
@@ -72,6 +77,25 @@ describe('modo autônomo', () => {
     expect(extractPrompt(`<continuidade>${PROMPT}</continuidade> Pronto, o prompt está entre <continuidade> e </continuidade>.`)).toBe(PROMPT);
     expect(extractPrompt('terminei tudo')).toBeUndefined();
     expect(extractPrompt(undefined)).toBeUndefined();
+  });
+
+  it('marcador imitado: um bloco <continuidade> que o agente já escrevia no turno em curso não vira o prompt', () => {
+    const c = setup();
+    // pedido urgente, no meio de um turno (contexto 50% acima do limite), de um agente trabalhando no próprio Habblaud
+    c.agents[0].status = 'working';
+    c.agents[0].stats.contextTokens = 230_000;
+    c.relay.set('m1', true);
+    c.relay.tick();
+    expect(c.sent).toHaveLength(1);
+    c.agents[0].status = 'idle';
+    c.answer('m1', `Documentei o formato: <continuidade>${'texto de exemplo da documentação, e não o prompt. '.repeat(2)}</continuidade>`);
+    expect(c.launched).toEqual([]);
+    expect(c.view.get('m1')!.phase).toBe('asked');
+    // a resposta ao pedido, com a marca que o pedido deu
+    c.answer('m1', c.mark(PROMPT));
+    expect(c.launched).toHaveLength(1);
+    expect(c.launched[0]).toContain(PROMPT);
+    expect(c.launched[0]).not.toContain('texto de exemplo');
   });
 
   it('só liga em agente principal do Claude Code', () => {
@@ -109,7 +133,7 @@ describe('modo autônomo', () => {
     // o turno anterior acabou (a mensagem estava na fila): ainda não é a resposta
     c.answer('m1', 'Pronto, terminei a tarefa.');
     expect(c.launched).toEqual([]);
-    c.answer('m1', `Fechei tudo.\n<continuidade>${PROMPT}</continuidade>`);
+    c.answer('m1', `Fechei tudo.\n${c.mark(PROMPT)}`);
     expect(c.launched).toHaveLength(1);
     expect(c.launched[0]).toContain(PROMPT);
     expect(c.view.get('m1')).toMatchObject({ phase: 'done' });
@@ -125,7 +149,7 @@ describe('modo autônomo', () => {
     const c = setup(1);
     c.relay.set('m1', true);
     c.relay.tick();
-    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    c.answer('m1', c.mark(PROMPT));
     expect(c.relay.set('m1', true, 299_999, true)).toBe(true);
     expect(c.view.get('m1')).toMatchObject({ phase: 'done', threshold: 299_999, subs: true });
     c.relay.tick();
@@ -160,7 +184,7 @@ describe('modo autônomo', () => {
     const c = setup();
     c.relay.set('m1', true);
     c.relay.tick();
-    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    c.answer('m1', c.mark(PROMPT));
     c.advance(4 * 60_000);
     c.relay.tick();
     expect(c.notices.at(-1)).toContain('não apareceu');
@@ -174,7 +198,7 @@ describe('modo autônomo', () => {
     expect(stillRunning(c.agents[0], c.agents)).toEqual(['npm run dev', 'Beto']);
     c.relay.set('m1', true);
     c.relay.tick();
-    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    c.answer('m1', c.mark(PROMPT));
     expect(c.launched).toEqual([]);
     expect(c.sent[1]).toContain('npm run dev, Beto');
     expect(c.view.get('m1')!.phase).toBe('cleaning');
@@ -188,7 +212,7 @@ describe('modo autônomo', () => {
     c.agents[0].shells = [{ id: 'b1', label: 'npm run dev', startedAt: 0, background: true, kind: 'shell' }];
     c.relay.set('m1', true);
     c.relay.tick();
-    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    c.answer('m1', c.mark(PROMPT));
     delete c.agents[0].shells;
     c.answer('m1', 'ok');
     expect(c.launched[0]).toContain(PROMPT);
@@ -257,7 +281,7 @@ describe('modo autônomo', () => {
     c.ctx.canLaunch = false;
     c.relay.set('m1', true);
     c.relay.tick();
-    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    c.answer('m1', c.mark(PROMPT));
     expect(c.view.get('m1')).toMatchObject({ phase: 'paused', retry: true });
     expect(readdirSync(join(tmp.dir, 'prompts'))).toHaveLength(1);
     // gravação por temporário + rename (nada sobra) e só para o dono

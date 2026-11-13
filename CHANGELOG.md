@@ -70,6 +70,13 @@ do meio (0.**3**.0).
   ficou offline.
 - **Modo demonstração só liga pelo próprio computador.** Com `HABBLAUD_HOST=0.0.0.0`, outro aparelho da rede
   conseguia ligar ou desligar a demonstração.
+- **Novo agente no Windows: o atalho de abrir o app do Claude leva o pedido.** Quando o `claude --bg` não conseguia
+  abrir o agente, o link do app era cortado no primeiro `&`: o app abria sem o pedido e a página mostrava falha.
+- **Modo autônomo: só vale como prompt de continuidade o texto entre as marcas daquele pedido.** Cada pedido agora
+  dá marcas com um id próprio; antes, um bloco `<continuidade>` que o agente já estivesse escrevendo por outro
+  motivo podia ser tomado como o prompt da sessão nova.
+- **Arquivos do agente: pastas de rede (`\\servidor\pasta`) citadas em comandos não são mais conferidas.** Um
+  servidor que não responde deixava o Habblaud inteiro parado por uns 20 segundos ao abrir a lista.
 - **Entregas no Windows: os arquivos voltam a aparecer.** Caminhos como `C:\...` eram recusados como inválidos, e
   links na resposta do agente (inclusive `file:///C:/...`) eram tratados como endereço de internet. O filtro de
   arquivos protegidos (`.ssh`, `.aws`, `.env`, chaves) agora também vale para caminhos com `\`, e pastas de rede

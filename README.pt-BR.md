@@ -1001,7 +1001,7 @@ das contas (letra, e-mail, organização) são lidos no host pelo `docker:up` e 
   fica em `~/.habblaud/remote-tls/ca` e nunca vai para o container.
 - **Novo agente, opt-in:** com `HABBLAUD_PTY=1`, o escritório começa sessões do Claude Code com o pedido que você
   escreveu, na pasta que você escolher — vale o mesmo aviso do terminal interativo. Os anexos são gravados em
-  `~/.habblaud/attachments/` (pasta 700, arquivos 600). No Docker, quem começa as sessões é o auxiliar do host
+  `~/.habblaud/attachments/` (pasta 700, arquivos 600) e o Habblaud nunca os apaga: limpe essa pasta quando não precisar mais deles. No Docker, quem começa as sessões é o auxiliar do host
   (`npm run codex:bridge`), que também só lê os arquivos das entregas de pastas de projeto conhecidas (as que o Claude
   Code tem em `<conta>/projects`), da pasta temporária e dos anexos.
 - **Editor de personagem, só local:** salvar ou voltar ao sorteio muda o escritório e grava em `names.json`, então

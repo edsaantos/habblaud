@@ -2,7 +2,7 @@ import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { tempDir, writeLines } from '../test/fixtures';
-import { openCommand, pathTokens, toSystemPath, touchedFiles, touchesOf } from './touched';
+import { openCommand, pathTokens, summarize, toSystemPath, touchedFiles, touchesOf } from './touched';
 
 const line = (cwd: string, name: string, input: Record<string, unknown>, timestamp = '2026-01-01T00:00:00.000Z') =>
   JSON.stringify({ type: 'assistant', cwd, timestamp, message: { content: [{ type: 'tool_use', id: 't', name, input }] } });
@@ -18,6 +18,14 @@ describe('arquivos do agente', () => {
   it('caminho com espaço entre aspas entra inteiro; /dev e /proc ficam de fora', () => {
     expect(pathTokens('ffmpeg -i "C:\\Users\\voce\\Meus Videos\\in.mp4" out.mp4', true)).toEqual(['C:\\Users\\voce\\Meus Videos\\in.mp4', 'C:\\Users\\voce\\Meus', 'Videos\\in.mp4', 'out.mp4']);
     expect(pathTokens("cp '/home/ana/Meus Docs/a.png' /tmp/b 2>/dev/null; cat /proc/cpuinfo", false)).toEqual(['/home/ana/Meus Docs/a.png', '/home/ana/Meus', 'Docs/a.png', '/tmp/b']);
+  });
+
+  it('pasta de rede não é conferida no disco (um servidor que não responde travaria o servidor por ~20 s)', () => {
+    const net = '\\\\10.255.255.1\\pasta\\in.mp4';
+    const touch = (path: string, guess: boolean) => ({ path, op: 'command' as const, dir: false, cwd: 'C:\\repo', guess });
+    const t0 = performance.now();
+    expect(summarize([touch(net, true), touch(net, false), touch('//10.255.255.1/pasta', false)], 0)).toEqual({ media: [], outside: [] });
+    expect(performance.now() - t0).toBeLessThan(2_000);
   });
 
   it('abrir no sistema: no macOS a pasta é só mostrada no Finder (uma "Algo.app" seria executada)', () => {

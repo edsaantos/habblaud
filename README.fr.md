@@ -1052,7 +1052,7 @@ avec `no-new-privileges`. Les métadonnées des comptes (lettre, e-mail, organis
   conteneur.
 - **Nouvel agent, sur activation :** avec `HABBLAUD_PTY=1`, le bureau lance des sessions Claude Code avec la demande
   que vous avez écrite, dans le dossier que vous choisissez — le même avertissement que pour le terminal interactif
-  s'applique. Les pièces jointes sont écrites dans `~/.habblaud/attachments/` (dossier 700, fichiers 600). Dans Docker,
+  s'applique. Les pièces jointes sont écrites dans `~/.habblaud/attachments/` (dossier 700, fichiers 600) et Habblaud ne les supprime jamais : videz ce dossier quand vous n'en avez plus besoin. Dans Docker,
   c'est l'auxiliaire de l'hôte (`npm run codex:bridge`) qui lance les sessions ; il ne lit les fichiers des livraisons
   que dans les dossiers de projet connus (ceux que Claude Code a dans `<conta>/projects`), le dossier temporaire et les
   pièces jointes.

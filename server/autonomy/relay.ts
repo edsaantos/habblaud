@@ -1,9 +1,10 @@
 // Modo autônomo: revezamento de sessões para o contexto não crescer sem fim.
 // Ligado por agente (principal). Quando o contexto da sessão passa do limite, o Habblaud manda uma mensagem pedindo
 // para concluir o que está em andamento, encerrar o que roda em segundo plano e devolver o prompt de continuidade
-// entre <continuidade> e </continuidade>; com a resposta em mãos, abre uma sessão nova na mesma pasta (terminal
+// entre <continuidade-id> e </continuidade-id>; com a resposta em mãos, abre uma sessão nova na mesma pasta (terminal
 // interativo) com esse prompt. A sessão antiga fica aberta e parada. Nada aqui encerra processos: quem encerra é o
 // próprio agente, e o revezamento só acontece depois de o escritório não ver mais nada dele rodando.
+import { randomBytes } from 'node:crypto';
 import { closeSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tr } from '../../shared/i18n';
@@ -18,23 +19,29 @@ export const PROMPT_MAX = 12_000;
 /** Ponto seguro: o pedido espera o turno acabar; só interrompe um turno em curso com o contexto já nesse múltiplo do limite. */
 export const URGENT = 1.5;
 
-const TAG = /<continuidade>([\s\S]*?)<\/continuidade>/g;
+/**
+ * Nome da marca do prompt. Cada pedido tem o seu `id` aleatório: um bloco <continuidade> que o agente já escrevia por
+ * outro motivo (trabalhando no próprio Habblaud, por exemplo) não é tomado como o prompt. Sem `id`: estado gravado por
+ * uma versão anterior, no meio de um pedido.
+ */
+const tagOf = (id?: string) => (id ? `continuidade-${id}` : 'continuidade');
 
 /**
  * O prompt de continuidade da resposta do agente, ou undefined. Vale a última marcação com cara de prompt (40
  * caracteres ou mais): depois dele o agente costuma repetir a frase do pedido, "entre <continuidade> e </continuidade>".
  */
-export function extractPrompt(reply: string | undefined): string | undefined {
-  const all = [...(reply ?? '').matchAll(TAG)].map((m) => m[1].trim()).filter((t) => t.length >= 40);
+export function extractPrompt(reply: string | undefined, id?: string): string | undefined {
+  const tag = tagOf(id);
+  const all = [...(reply ?? '').matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'g'))].map((m) => m[1].trim()).filter((t) => t.length >= 40);
   return all.at(-1)?.slice(0, PROMPT_MAX);
 }
 
 const thousands = (n: number) => String(Math.round(n / 1000));
 
-export function handoffText(contextTokens: number): string {
+export function handoffText(contextTokens: number, id?: string): string {
   return tr(
-    '[Habblaud · modo autônomo] O contexto desta sessão chegou a {0} mil tokens e cada turno está ficando caro. 1) Conclua ou deixe num ponto seguro o que está em andamento, sem começar tarefas novas. 2) Encerre os subagentes e os processos em segundo plano que você iniciou. 3) Termine a resposta com o prompt de continuidade para uma sessão nova nesta mesma pasta, entre as marcas <continuidade> e </continuidade>: objetivo, o que já foi feito, o que falta, branch atual e alterações ainda não commitadas, arquivos e comandos importantes e decisões já tomadas, em até 6.000 caracteres. A sessão nova não verá esta conversa.',
-    [thousands(contextTokens)],
+    '[Habblaud · modo autônomo] O contexto desta sessão chegou a {0} mil tokens e cada turno está ficando caro. 1) Conclua ou deixe num ponto seguro o que está em andamento, sem começar tarefas novas. 2) Encerre os subagentes e os processos em segundo plano que você iniciou. 3) Termine a resposta com o prompt de continuidade para uma sessão nova nesta mesma pasta, entre as marcas <{1}> e </{1}>: objetivo, o que já foi feito, o que falta, branch atual e alterações ainda não commitadas, arquivos e comandos importantes e decisões já tomadas, em até 6.000 caracteres. A sessão nova não verá esta conversa.',
+    [thousands(contextTokens), tagOf(id)],
   );
 }
 
@@ -101,6 +108,8 @@ interface State {
   at: number;
   seenAt: number;
   prompt?: string;
+  /** Id da marca do pedido em andamento (tagOf). */
+  tag?: string;
   note?: string;
   from?: string;
   next?: string;
@@ -267,12 +276,14 @@ export class Relay {
     // ponto seguro: espera o turno acabar; no meio de um turno, só com o contexto já muito acima do limite
     if (a.status !== 'idle' && context < limit * URGENT) return;
     if (s.relays >= this.deps.maxRelays) return this.pause(id, s, a, tr('limite de {0} revezamentos seguidos', [this.deps.maxRelays]));
-    if (!this.deps.send(id, handoffText(context))) {
+    const tag = randomBytes(4).toString('hex');
+    if (!this.deps.send(id, handoffText(context, tag))) {
       s.note = tr('sem como mandar mensagem a esta sessão (plugin habblaud-mensagens)');
       return;
     }
     s.phase = 'asked';
     s.at = now;
+    s.tag = tag;
     delete s.note;
     this.publish(id, { level: 'info', text: tr('🔁 Modo autônomo: {0} passou de {1} mil tokens de contexto; pedi o prompt de continuidade.', [a.name, thousands(limit)]) });
   }
@@ -299,7 +310,7 @@ export class Relay {
     // só com o turno encerrado depois da mensagem
     if (a.status !== 'idle' || a.statusSince <= s.at) return;
     // (a mensagem pode ter esperado na fila o turno anterior acabar: resposta sem a marcação = ainda não é a nossa)
-    s.prompt ??= extractPrompt(this.deps.lastReply(id, s.at));
+    s.prompt ??= extractPrompt(this.deps.lastReply(id, s.at), s.tag);
     if (!s.prompt) return;
     const running = stillRunning(a, all);
     if (running.length) {

@@ -1039,7 +1039,7 @@ los pasa al contenedor.
   queda en `~/.habblaud/remote-tls/ca` y nunca entra en el contenedor.
 - **Nuevo agente, opcional (opt-in):** con `HABBLAUD_PTY=1`, la oficina inicia sesiones de Claude Code con la
   solicitud que escribiste, en la carpeta que elijas; vale la misma advertencia que para la terminal interactiva. Los
-  adjuntos se guardan en `~/.habblaud/attachments/` (carpeta 700, archivos 600). En Docker, quien inicia las sesiones
+  adjuntos se guardan en `~/.habblaud/attachments/` (carpeta 700, archivos 600) y Habblaud nunca los borra: vacía esa carpeta cuando ya no los necesites. En Docker, quien inicia las sesiones
   es el auxiliar del host (`npm run codex:bridge`), que además solo lee los archivos de las entregas de carpetas de
   proyecto conocidas (las que Claude Code tiene en `<conta>/projects`), de la carpeta temporal y de los adjuntos.
 - **Editor de personajes, solo local:** guardar o volver al sorteo cambia la oficina y escribe en `names.json`, así

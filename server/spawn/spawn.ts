@@ -144,17 +144,35 @@ export function folderProblem(folder: string, stat: (p: string) => { isDirectory
   }
 }
 
-/** `open`/`xdg-open`/`start` sem shell. */
+/**
+ * Programa (e argumentos fixos) que abre um link no sistema. No Windows, nada de `cmd /c start`: o cmd trata o "&" do
+ * link como separador de comandos, o app recebia só `?folder=…` e o resto virava comandos que falhavam.
+ */
+export function openerCommand(platform: NodeJS.Platform = process.platform): [string, string[]] {
+  if (platform === 'darwin') return ['open', []];
+  if (platform === 'win32') return ['rundll32', ['url.dll,FileProtocolHandler']];
+  return ['xdg-open', []];
+}
+
+/** `open`/`xdg-open`/`rundll32` sem shell. */
 export function createOpener(platform: NodeJS.Platform = process.platform, timeoutMs = OPEN_TIMEOUT_MS): Opener {
-  const [bin, pre] = platform === 'darwin' ? ['open', []] : platform === 'win32' ? ['cmd', ['/c', 'start', '""']] : ['xdg-open', []];
-  return (url) =>
-    new Promise((ok) => {
-      execFile(bin, [...pre, url], { timeout: timeoutMs, windowsHide: true, encoding: 'utf8' }, (err, _out, stderr) => {
+  const [bin, pre] = openerCommand(platform);
+  const run = (file: string, args: string[]) =>
+    new Promise<Awaited<ReturnType<Opener>>>((ok) => {
+      execFile(file, args, { timeout: timeoutMs, windowsHide: true, encoding: 'utf8' }, (err, _out, stderr) => {
         if (!err) return ok({ ok: true });
         const line = (stderr || err.message || '').split('\n').find((l) => l.trim()) ?? tr('falhou');
-        ok({ ok: false, error: `${bin}: ${line.trim()}`.slice(0, ERROR_MAX) });
+        ok({ ok: false, error: `${file}: ${line.trim()}`.slice(0, ERROR_MAX) });
       });
     });
+  return async (url) => {
+    // O rundll32 devolve sucesso mesmo sem programa para o link: antes, confere no registro se o protocolo tem dono.
+    const scheme = /^[a-z][a-z0-9+.-]*(?=:)/i.exec(url)?.[0];
+    if (platform === 'win32' && !(scheme && (await run('reg', ['query', `HKCR\\${scheme}`, '/v', 'URL Protocol'])).ok)) {
+      return { ok: false, error: tr('nenhum programa neste computador abre links {0}', [`${scheme ?? '?'}://`]) };
+    }
+    return run(bin, [...pre, url]);
+  };
 }
 
 interface Entry {
