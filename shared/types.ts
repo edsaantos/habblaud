@@ -141,6 +141,10 @@ export interface AgentAutonomy {
   /** Limite de contexto, em tokens. */
   threshold: number;
   note?: string;
+  /** Id do agente da sessão anterior da cadeia (de quem esta recebeu o trabalho). */
+  from?: string;
+  /** Id do agente da sessão nova (para quem esta passou o trabalho). */
+  next?: string;
 }
 
 export interface AgentInfo {

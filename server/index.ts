@@ -343,7 +343,7 @@ const relay =
           return ptys.createWithPrompt({ cwd, account: a.account, prompt, permissionMode }).agentId;
         },
         publish: (id, autonomy, notice) => office.setAutonomy(id, autonomy, notice),
-        threshold: positive(process.env.HABBLAUD_AUTONOMO_TOKENS, 150_000),
+        threshold: positive(process.env.HABBLAUD_AUTONOMO_TOKENS, 200_000),
         maxRelays: positive(process.env.HABBLAUD_AUTONOMO_MAX, 3),
       })
     : undefined;

@@ -91,6 +91,10 @@ interface State {
   seenAt: number;
   prompt?: string;
   note?: string;
+  from?: string;
+  next?: string;
+  /** Já apareceu no escritório (a sessão nova nasce sem isso). */
+  seen?: boolean;
 }
 
 export class Relay {
@@ -115,7 +119,7 @@ export class Relay {
   set(agentId: string, enabled: boolean): boolean {
     const a = this.deps.agents().find((x) => x.id === agentId);
     if (!a || a.kind !== 'main' || a.provider === 'codex') return false;
-    if (enabled) this.states.set(agentId, { phase: 'armed', relays: 0, at: 0, seenAt: this.now() });
+    if (enabled) this.states.set(agentId, { phase: 'armed', relays: 0, at: 0, seenAt: this.now(), seen: true });
     else this.states.delete(agentId);
     this.publish(agentId);
     return true;
@@ -123,7 +127,7 @@ export class Relay {
 
   private publish(id: string, notice?: { level: NoticeLevel; text: string }): void {
     const s = this.states.get(id);
-    const view: AgentAutonomy | undefined = s && { phase: s.phase, relays: s.relays, threshold: this.deps.threshold, ...(s.note ? { note: s.note } : {}) };
+    const view: AgentAutonomy | undefined = s && { phase: s.phase, relays: s.relays, threshold: this.deps.threshold, ...(s.note ? { note: s.note } : {}), ...(s.from ? { from: s.from } : {}), ...(s.next ? { next: s.next } : {}) };
     this.deps.publish(id, view, notice);
   }
 
@@ -139,9 +143,19 @@ export class Relay {
     for (const [id, s] of [...this.states]) {
       const a = all.find((x) => x.id === id);
       if (!a || a.status === 'offline') {
-        if (now - s.seenAt > MISSING_MS) this.states.delete(id);
+        if (now - s.seenAt > MISSING_MS) {
+          this.states.delete(id);
+          // sessão nova que nunca apareceu: avisa na antiga, em vez de sumir calada
+          const prev = s.seen ? undefined : this.states.get(s.from ?? '');
+          if (prev && s.from) {
+            delete prev.next;
+            prev.note = tr('a sessão nova não apareceu no escritório');
+            this.publish(s.from, { level: 'warn', text: tr('⚠️ Modo autônomo: a sessão nova não apareceu no escritório. O prompt de continuidade está na última resposta da sessão anterior.') });
+          }
+        }
         continue;
       }
+      s.seen = true;
       s.seenAt = now;
       try {
         if (s.phase === 'armed') this.watch(id, s, a, now);
@@ -187,7 +201,8 @@ export class Relay {
     const relays = s.relays + 1;
     const next = this.deps.launch(a, tr('[Habblaud · modo autônomo] Continuação da sessão anterior desta pasta (revezamento {0}).', [relays]) + '\n\n' + s.prompt);
     s.phase = 'done';
-    this.states.set(next, { phase: 'armed', relays, at: 0, seenAt: now });
+    s.next = next;
+    this.states.set(next, { phase: 'armed', relays, at: 0, seenAt: now, from: id });
     this.publish(id, { level: 'success', text: tr('🔁 {0} passou o trabalho para uma sessão nova (revezamento {1} de {2}).', [a.name, relays, this.deps.maxRelays]) });
   }
 }

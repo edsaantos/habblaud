@@ -111,8 +111,20 @@ describe('modo autônomo', () => {
     // a sessão nova aparece no escritório já com o modo ligado e um revezamento na conta
     c.agents.push(agent('m2', { stats: { toolCalls: 0, tokensIn: 0, tokensOut: 0, subagents: 0, contextTokens: 10_000 } }));
     c.relay.tick();
-    expect(c.view.get('m2')).toMatchObject({ phase: 'armed', relays: 1 });
+    expect(c.view.get('m2')).toMatchObject({ phase: 'armed', relays: 1, from: 'm1' });
+    expect(c.view.get('m1')).toMatchObject({ phase: 'done', next: 'm2' });
     expect(c.sent).toHaveLength(1);
+  });
+
+  it('sessão nova que não aparece no escritório: avisa na anterior', () => {
+    const c = setup();
+    c.relay.set('m1', true);
+    c.relay.tick();
+    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    c.advance(4 * 60_000);
+    c.relay.tick();
+    expect(c.notices.at(-1)).toContain('não apareceu');
+    expect(c.view.get('m1')!.next).toBeUndefined();
   });
 
   it('algo rodando em segundo plano: pede para encerrar uma vez; se continuar, para sem abrir a sessão', () => {

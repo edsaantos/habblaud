@@ -296,6 +296,7 @@ class AgentView {
   private autoSec: ReturnType<typeof section>;
   private autoState: HTMLElement;
   private autoBtn: HTMLButtonElement;
+  private autoLink: HTMLButtonElement;
   private filesSec: ReturnType<typeof section>;
   private filesBody: HTMLElement;
   private filesBtn: HTMLButtonElement;
@@ -436,6 +437,20 @@ class AgentView {
     // Modo autônomo: revezamento de sessões quando o contexto fica grande (server/autonomy/relay.ts).
     this.autoState = h('p', { class: 'ui-small' });
     this.autoBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', on: { click: () => this.toggleAutonomy() } }) as HTMLButtonElement;
+    // ▶ vai para a outra ponta do revezamento: a sessão anterior (já com o terminal aberto, para consultar) ou a nova
+    this.autoLink = h('button', {
+      class: 'ui-btn ui-btn--sm',
+      type: 'button',
+      on: {
+        click: () => {
+          const m = this.last?.autonomy;
+          const id = m?.next ?? m?.from;
+          if (!id || !ctx.agent(id)) return;
+          ctx.select({ type: 'agent', id }, { focus: true });
+          if (!m?.next) (ctx.terminals ?? this.terminal).open(id);
+        },
+      },
+    }) as HTMLButtonElement;
     this.autoSec = section(
       tr('Modo autônomo'),
       h('p', {
@@ -444,6 +459,7 @@ class AgentView {
       }),
       this.autoState,
       this.autoBtn,
+      this.autoLink,
     );
 
     // Arquivos: só busca quando pedem (o servidor relê o transcript da sessão e dos subagentes).
@@ -735,6 +751,9 @@ class AgentView {
     setHidden(this.autoSec.el, this.ctx.store.mock || a.kind !== 'main' || a.provider === 'codex' || !meta?.messages || !meta.pty?.enabled || access().remote);
     setText(this.autoBtn, a.autonomy ? tr('Desligar') : tr('Ligar'));
     if (!this.autoBtn.disabled) setText(this.autoState, autonomyLine(a));
+    const other = a.autonomy?.next ?? a.autonomy?.from;
+    setHidden(this.autoLink, !other || !this.ctx.agent(other));
+    setText(this.autoLink, a.autonomy?.next ? tr('▶ Ir para a sessão nova') : tr('▶ Consultar a sessão anterior'));
 
     // Arquivos: mesma trava do terminal (mostra caminhos de fora do projeto).
     setHidden(this.filesSec.el, this.ctx.store.mock || !this.ctx.store.snapshot?.meta.terminal || !access().terminal);
