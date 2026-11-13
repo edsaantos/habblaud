@@ -4,7 +4,7 @@
 // entre <continuidade> e </continuidade>; com a resposta em mãos, abre uma sessão nova na mesma pasta (terminal
 // interativo) com esse prompt. A sessão antiga fica aberta e parada. Nada aqui encerra processos: quem encerra é o
 // próprio agente, e o revezamento só acontece depois de o escritório não ver mais nada dele rodando.
-import { closeSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tr } from '../../shared/i18n';
 import type { AgentAutonomy, AgentInfo, NoticeLevel } from '../../shared/types';
@@ -20,11 +20,13 @@ export const URGENT = 1.5;
 
 const TAG = /<continuidade>([\s\S]*?)<\/continuidade>/g;
 
-/** O prompt de continuidade da resposta do agente (a última marcação vale), ou undefined. */
+/**
+ * O prompt de continuidade da resposta do agente, ou undefined. Vale a última marcação com cara de prompt (40
+ * caracteres ou mais): depois dele o agente costuma repetir a frase do pedido, "entre <continuidade> e </continuidade>".
+ */
 export function extractPrompt(reply: string | undefined): string | undefined {
-  const all = [...(reply ?? '').matchAll(TAG)];
-  const text = all.at(-1)?.[1].trim();
-  return text && text.length >= 40 ? text.slice(0, PROMPT_MAX) : undefined;
+  const all = [...(reply ?? '').matchAll(TAG)].map((m) => m[1].trim()).filter((t) => t.length >= 40);
+  return all.at(-1)?.slice(0, PROMPT_MAX);
 }
 
 const thousands = (n: number) => String(Math.round(n / 1000));
@@ -43,7 +45,10 @@ export function stillRunning(agent: AgentInfo, all: readonly AgentInfo[]): strin
   return [...shells, ...subs];
 }
 
-/** Texto da última resposta do agente escrita depois de `since` (lê só o fim do transcript). */
+/**
+ * Tudo o que o agente escreveu depois de `since`, em ordem (lê só o fim do transcript). Não só o último bloco: o
+ * prompt pode vir antes de uma ferramenta e de um "Pronto." final.
+ */
 export function lastAssistantText(path: string, since: number): string | undefined {
   const size = statSync(path).size;
   const len = Math.min(size, 1_000_000);
@@ -55,18 +60,19 @@ export function lastAssistantText(path: string, since: number): string | undefin
     closeSync(fd);
   }
   const lines = buf.toString('utf8').split('\n');
+  const texts: string[] = [];
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i].includes('"type":"assistant"')) continue;
     try {
       const j = JSON.parse(lines[i]) as { timestamp?: string; message?: { content?: { type?: string; text?: string }[] } };
-      if (!(Date.parse(j.timestamp ?? '') > since)) return undefined;
+      if (!(Date.parse(j.timestamp ?? '') > since)) break;
       const text = (j.message?.content ?? []).filter((b) => b.type === 'text' && b.text).map((b) => b.text).join('\n');
-      if (text) return text;
+      if (text) texts.unshift(text);
     } catch {
       // linha cortada no começo do trecho lido
     }
   }
-  return undefined;
+  return texts.length ? texts.join('\n') : undefined;
 }
 
 export interface RelayDeps {
@@ -133,7 +139,10 @@ export class Relay {
     if (text === this.saved) return;
     try {
       mkdirSync(this.deps.dir, { recursive: true });
-      writeFileSync(join(this.deps.dir, 'state.json'), text);
+      // temporário + rename: uma queda no meio da gravação não deixa o state.json pela metade
+      const file = join(this.deps.dir, 'state.json');
+      writeFileSync(`${file}.tmp`, text, { mode: 0o600 });
+      renameSync(`${file}.tmp`, file);
       this.saved = text;
     } catch {
       // disco cheio ou pasta sem permissão: o modo segue só na memória
@@ -146,7 +155,7 @@ export class Relay {
     try {
       const dir = join(this.deps.dir, 'prompts');
       mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, `${new Date(this.now()).toISOString().replace(/[:.]/g, '-')}-${a.sessionId.replace(/[^\w-]/g, '_')}.md`), prompt);
+      writeFileSync(join(dir, `${new Date(this.now()).toISOString().replace(/[:.]/g, '-')}-${a.sessionId.replace(/[^\w-]/g, '_')}.md`), prompt, { mode: 0o600 });
     } catch {
       // idem save()
     }
@@ -170,8 +179,9 @@ export class Relay {
     const a = this.deps.agents().find((x) => x.id === agentId);
     if (!a || a.kind !== 'main' || a.provider === 'codex') return false;
     const s = this.states.get(agentId);
-    // já ligado e em andamento: só troca as opções
-    if (enabled && s && s.phase !== 'paused' && s.phase !== 'done') Object.assign(s, { threshold, subs });
+    // já ligado: só troca as opções. Rearmar uma sessão parada ou que já passou o trabalho é desligar e ligar:
+    // recriar o estado aqui pediria outro prompt e abriria uma segunda sessão nova (e zeraria o teto de revezamentos).
+    if (enabled && s) Object.assign(s, { threshold, subs });
     else if (enabled) this.states.set(agentId, { phase: 'armed', relays: 0, at: 0, seenAt: this.now(), seen: true, threshold, subs });
     else this.states.delete(agentId);
     this.publish(agentId);
@@ -222,6 +232,7 @@ export class Relay {
       if (!a || a.status === 'offline') {
         if (now - s.seenAt > MISSING_MS) {
           this.states.delete(id);
+          this.deps.publish(id, undefined); // o agente offline ainda aparece na gaveta: tira a etiqueta
           // sessão nova que nunca apareceu: avisa na antiga, em vez de sumir calada
           const prev = s.seen ? undefined : this.states.get(s.from ?? '');
           if (prev && s.from) {

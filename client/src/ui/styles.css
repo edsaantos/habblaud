@@ -11192,6 +11192,12 @@ html.is-replay #world {
 .ui-files__tile > .ui-icon-btn.is-done {
   opacity: 1;
 }
+/* Telas de toque (sem hover): o botão de copiar o caminho fica sempre à vista. */
+@media (hover: none) {
+  .ui-files__tile > .ui-icon-btn {
+    opacity: 1;
+  }
+}
 .ui-files__open {
   width: 100%;
   display: flex;
@@ -11225,4 +11231,9 @@ html.is-replay #world {
 .ui-files__open:hover,
 .ui-files__open:focus-visible {
   background: color-mix(in srgb, currentColor 10%, transparent);
+}
+/* Acesso remoto: o item não abre nada (só mostra e copia o caminho). */
+.ui-files__open:disabled {
+  background: none;
+  cursor: default;
 }

@@ -91,6 +91,17 @@ function newSim(): Sim {
 }
 
 describe('simulação do escritório', () => {
+  it('modo autônomo: quem passou o trabalho adiante fica livre e só cochila um trecho de 5 min a cada quatro', () => {
+    const sim = newSim();
+    const since = T0 - 60 * 60_000;
+    const done = { phase: 'done' as const, relays: 1, threshold: 200_000 };
+    sim.applySnapshot(snap([room('/a', 0)], [agent('ana', '/a', 'idle', { statusSince: since }), agent('bia', '/a', 'idle', { statusSince: since, autonomy: done })]), T0);
+    const stretches = [0, 1, 2, 3].map((k) => T0 + k * 300_000);
+    // ocioso há muito tempo, sem o modo: cochila sempre
+    expect(stretches.map((t) => sim.longIdle(sim.chars.get('ana')!, t))).toEqual([true, true, true, true]);
+    expect(stretches.filter((t) => sim.longIdle(sim.chars.get('bia')!, t))).toHaveLength(1);
+  });
+
   it('carga inicial: quem trabalha já está sentado digitando, sala acesa', () => {
     const sim = newSim();
     const clock = { now: T0 };

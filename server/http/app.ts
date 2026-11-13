@@ -736,7 +736,7 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
     if (path === '/api/demo') {
       // Liga o modo demonstração para todo mundo: só pelo computador (o celular com login só vê o que foi liberado).
       if (method !== 'POST') methodNotAllowed(res, 'POST');
-      else if (isRemote(req)) sendJson(res, 403, { error: tr('não liberado no acesso remoto (veja HABBLAUD_REMOTE_ALLOW)') });
+      else if (!trusted(req)) sendJson(res, 403, { error: denied(req, tr('o modo demonstração só liga pelo próprio computador (http://localhost)')) });
       else handleDemo(req, res).catch((err) => fail(res, err));
       return true;
     }

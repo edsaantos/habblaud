@@ -346,7 +346,8 @@ const relay =
           return ptys.createWithPrompt({ cwd, account: a.account, prompt, permissionMode }).agentId;
         },
         publish: (id, autonomy, notice) => office.setAutonomy(id, autonomy, notice),
-        threshold: positive(process.env.HABBLAUD_AUTONOMO_TOKENS, 200_000),
+        // mesmo piso da API (50 mil): "200" querendo dizer 200 mil faria toda sessão armada revezar a cada turno
+        threshold: Math.max(50_000, positive(process.env.HABBLAUD_AUTONOMO_TOKENS, 200_000)),
         maxRelays: positive(process.env.HABBLAUD_AUTONOMO_MAX, 3),
         dir: join(config.dataDir, 'autonomy'),
       })

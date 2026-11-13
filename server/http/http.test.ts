@@ -191,6 +191,10 @@ describe('API HTTP', () => {
     expect((await fetch(`${env.base}/api/demo`, { method: 'POST', headers: JSON_HEADERS, body: '{"enabled":1}' })).status).toBe(400);
     expect((await fetch(`${env.base}/api/demo`, { method: 'POST', headers: JSON_HEADERS, body: '{' })).status).toBe(400);
     expect((await fetch(`${env.base}/api/demo`)).status).toBe(405);
+    // De outro aparelho da rede (HABBLAUD_HOST=0.0.0.0, Host que não é local): vê o escritório, mas não mexe na demonstração.
+    const lan = await raw(env.base, '/api/demo', { method: 'POST', headers: { ...JSON_HEADERS, Host: `192.168.0.10:${new URL(env.base).port}` }, body: JSON.stringify({ enabled: false }) });
+    expect(lan.status).toBe(403);
+    expect((await snapshotOf(env.base)).meta.demo).toBe(true);
   });
 
   it('DNS rebinding: Host de outro domínio é recusado em qualquer rota', async () => {

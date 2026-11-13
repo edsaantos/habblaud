@@ -1,8 +1,8 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AgentAutonomy, AgentInfo } from '../../shared/types';
-import { L, tempDir, writeLines } from '../test/fixtures';
+import { HAS_POSIX_MODES, L, tempDir, writeLines } from '../test/fixtures';
 import { extractPrompt, lastAssistantText, Relay, REPLY_TIMEOUT_MS, stillRunning } from './relay';
 
 const PROMPT = 'Objetivo: terminar o módulo X. Feito: A e B. Falta: C. Arquivos: src/x.ts.';
@@ -68,6 +68,8 @@ function setup(maxRelays = 3, dir?: string) {
 describe('modo autônomo', () => {
   it('extrai o prompt da última marcação e ignora resposta sem ela', () => {
     expect(extractPrompt(`ok <continuidade>curto</continuidade> e <continuidade>\n${PROMPT}\n</continuidade>`)).toBe(PROMPT);
+    // o agente repete a frase do pedido depois do prompt: a marcação curta (" e ") não vale
+    expect(extractPrompt(`<continuidade>${PROMPT}</continuidade> Pronto, o prompt está entre <continuidade> e </continuidade>.`)).toBe(PROMPT);
     expect(extractPrompt('terminei tudo')).toBeUndefined();
     expect(extractPrompt(undefined)).toBeUndefined();
   });
@@ -117,6 +119,41 @@ describe('modo autônomo', () => {
     expect(c.view.get('m2')).toMatchObject({ phase: 'armed', relays: 1, from: 'm1' });
     expect(c.view.get('m1')).toMatchObject({ phase: 'done', next: 'm2' });
     expect(c.sent).toHaveLength(1);
+  });
+
+  it('trocar o limite numa sessão que já passou o trabalho ou parou só troca as opções: não rearma nem zera o teto', () => {
+    const c = setup(1);
+    c.relay.set('m1', true);
+    c.relay.tick();
+    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    expect(c.relay.set('m1', true, 299_999, true)).toBe(true);
+    expect(c.view.get('m1')).toMatchObject({ phase: 'done', threshold: 299_999, subs: true });
+    c.relay.tick();
+    c.relay.tick();
+    expect([c.sent.length, c.launched.length]).toEqual([1, 1]);
+    // a sessão nova chega ao teto e para; mexer nas opções dela não a rearma
+    c.agents.push(agent('m2'));
+    c.relay.tick();
+    expect(c.view.get('m2')).toMatchObject({ phase: 'paused', relays: 1 });
+    c.relay.set('m2', true, 500_000);
+    c.relay.tick();
+    expect(c.view.get('m2')).toMatchObject({ phase: 'paused', relays: 1, threshold: 500_000 });
+    expect([c.sent.length, c.launched.length]).toEqual([1, 1]);
+    // desligar e ligar é o que rearma
+    c.relay.set('m2', false);
+    c.relay.set('m2', true, 500_000);
+    expect(c.view.get('m2')).toMatchObject({ phase: 'armed', relays: 0 });
+  });
+
+  it('agente que sumiu do escritório: depois do prazo o estado some e a etiqueta sai', () => {
+    const c = setup();
+    c.relay.set('m1', true);
+    c.agents[0].status = 'offline';
+    c.relay.tick();
+    expect(c.view.get('m1')).toBeDefined();
+    c.advance(4 * 60_000);
+    c.relay.tick();
+    expect(c.view.get('m1')).toBeUndefined();
   });
 
   it('sessão nova que não aparece no escritório: avisa na anterior', () => {
@@ -223,6 +260,9 @@ describe('modo autônomo', () => {
     c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
     expect(c.view.get('m1')).toMatchObject({ phase: 'paused', retry: true });
     expect(readdirSync(join(tmp.dir, 'prompts'))).toHaveLength(1);
+    // gravação por temporário + rename (nada sobra) e só para o dono
+    expect(readdirSync(tmp.dir).sort()).toEqual(['prompts', 'state.json']);
+    if (HAS_POSIX_MODES) expect(statSync(join(tmp.dir, 'state.json')).mode & 0o777).toBe(0o600);
 
     // Habblaud reiniciou: o estado volta do disco
     const again = setup(3, tmp.dir);
@@ -235,11 +275,19 @@ describe('modo autônomo', () => {
     tmp.cleanup();
   });
 
-  it('lê do transcript a última resposta escrita depois da mensagem', () => {
+  it('lê do transcript tudo o que o agente escreveu depois da mensagem (o prompt pode vir antes de uma ferramenta)', () => {
     const tmp = tempDir();
     const path = join(tmp.dir, 's.jsonl');
-    writeLines(path, [L.prompt('oi'), L.assistant([L.text('primeira')], { stop: 'end_turn' }), L.assistant([L.tool('t1', 'Read', { file_path: 'a' })]), L.assistant([L.text('última')], { stop: 'end_turn' })]);
-    expect(lastAssistantText(path, 0)).toBe('última');
+    writeLines(path, [
+      L.prompt('oi', { at: 1_000 }),
+      L.assistant([L.text('antes da mensagem')], { stop: 'end_turn', at: 2_000 }),
+      L.assistant([L.text(`<continuidade>${PROMPT}</continuidade>`)], { at: 4_000 }),
+      L.assistant([L.tool('t1', 'Read', { file_path: 'a' })], { at: 5_000 }),
+      L.assistant([L.text('Pronto.')], { stop: 'end_turn', at: 6_000 }),
+    ]);
+    expect(lastAssistantText(path, 3_000)).toBe(`<continuidade>${PROMPT}</continuidade>\nPronto.`);
+    expect(extractPrompt(lastAssistantText(path, 3_000))).toBe(PROMPT);
+    expect(lastAssistantText(path, 5_500)).toBe('Pronto.');
     expect(lastAssistantText(path, Date.now() + 60_000)).toBeUndefined();
     tmp.cleanup();
   });
