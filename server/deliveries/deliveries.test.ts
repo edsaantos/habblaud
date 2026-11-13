@@ -1,9 +1,10 @@
 import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createTerminalParser } from '../sources/terminal';
 import { tempDir } from '../test/fixtures';
 import { DeliveryIndex, headlineOf, linkedFiles, parseTurns, summaryOf } from './deliveries';
+import { toSlashes } from './files';
 
 const ts = (s: number) => new Date(Date.UTC(2026, 9, 12, 12, 0, s)).toISOString();
 const user = (id: string, s: number, text: string) => ({ type: 'user', uuid: id, timestamp: ts(s), message: { role: 'user', content: text } });
@@ -60,9 +61,14 @@ describe('entregas: texto', () => {
   });
 
   it('links para arquivos de ver: absolutos, relativos ao projeto; nada protegido', () => {
-    expect(linkedFiles(REPLY, '/Users/ana/proj')).toEqual(['/Users/ana/proj/relatorio.pdf']);
-    expect(linkedFiles('veja [a](telas/a.png) e [b](https://x.com/b.png) e /Users/ana/.ssh/k.png', '/Users/ana/proj')).toEqual(['/Users/ana/proj/telas/a.png']);
+    expect(linkedFiles(REPLY, '/Users/ana/proj')).toEqual([normalize('/Users/ana/proj/relatorio.pdf')]);
+    expect(linkedFiles('veja [a](telas/a.png) e [b](https://x.com/b.png) e /Users/ana/.ssh/k.png', '/Users/ana/proj')).toEqual([normalize('/Users/ana/proj/telas/a.png')]);
     expect(linkedFiles('[c](relativo.png)')).toEqual([]);
+  });
+
+  it('links com caminhos do Windows: unidade, file:///, relativo ao projeto e solto; nada protegido', () => {
+    const text = 'veja [a](C:\\Users\\ana\\proj\\out\\a.png), [b](file:///C:/Users/ana/proj/b.pdf), [c](telas/c.png), D:\\videos\\d.mp4, C:\\Users\\ana\\.ssh\\k.png e [e](https://x.com/e.png)';
+    expect(linkedFiles(text, 'C:\\Users\\ana\\proj').map(toSlashes)).toEqual(['C:/Users/ana/proj/out/a.png', 'C:/Users/ana/proj/b.pdf', 'C:/Users/ana/proj/telas/c.png', 'D:/videos/d.mp4']);
   });
 });
 

@@ -50,6 +50,7 @@ import { DictationService } from './dictation/dictation';
 import { createWhisperTranscriber, findWhisper } from './dictation/whisper';
 import { DeliveryIndex } from './deliveries/deliveries';
 import { FileFetcher } from './deliveries/fetcher';
+import { toSlashes } from './deliveries/files';
 import { listed, openInSystem, touchedFiles } from './files/touched';
 import { lastAssistantText, Relay } from './autonomy/relay';
 import { WorldClient } from './world/client';
@@ -224,8 +225,10 @@ const deliveryFiles = deliveries
       direct: !config.inDocker,
       mapHostPath: (p) => {
         for (const e of accounts.entries()) {
-          const host = e.detected.configDir.replace(/\/+$/, '');
-          if (host && p.startsWith(`${host}/`)) return `${e.dir.replace(/\/+$/, '')}${p.slice(host.length)}`;
+          // toSlashes: num host Windows a pasta da conta e o caminho pedido vêm com "\".
+          const host = toSlashes(e.detected.configDir).replace(/\/+$/, '');
+          const path = toSlashes(p);
+          if (host && path.startsWith(`${host}/`)) return `${e.dir.replace(/\/+$/, '')}${path.slice(host.length)}`;
         }
         return undefined;
       },
