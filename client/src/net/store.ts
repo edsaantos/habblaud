@@ -183,8 +183,8 @@ export class OfficeStore {
   }
 
   /** Liga/desliga o modo autônomo de um agente principal. Devolve a mensagem de erro, se houver. */
-  async setAutonomy(agentId: string, enabled: boolean): Promise<string | undefined> {
-    const res = await fetch('/api/autonomy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, enabled }) }).catch(() => null);
+  async setAutonomy(agentId: string, op: { enabled: boolean; threshold?: number } | { retry: true }): Promise<string | undefined> {
+    const res = await fetch('/api/autonomy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, ...op }) }).catch(() => null);
     if (res?.ok) return undefined;
     const data = (await res?.json().catch(() => null)) as { error?: unknown } | null;
     return typeof data?.error === 'string' ? data.error : tr('Sem conexão com o Habblaud.');

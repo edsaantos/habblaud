@@ -77,7 +77,7 @@ export interface ApiDeps {
   /** Quem lê os arquivos das entregas (e, para o auxiliar do host, /api/host/files/*; deliveries/fetcher.ts). */
   files?: FileFetcher;
   /** Liga/desliga o modo autônomo de um agente (POST /api/autonomy {agentId, enabled}; autonomy/relay.ts). False = agente que não pode. */
-  autonomy?: (agentId: string, enabled: boolean) => boolean;
+  autonomy?: (agentId: string, op: { enabled: boolean; threshold?: number } | { retry: true }) => boolean;
   /** Arquivos de um agente (GET /api/agents/:id/files; files/touched.ts). Undefined = agente sem transcript. */
   touched?: (agentId: string) => Promise<TouchedFiles | undefined>;
   /** Abre no computador um item dessa lista (POST /api/agents/:id/files/open {path}). False = não está na lista. */
@@ -660,9 +660,10 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       else
         readJson(req)
           .then((body) => {
-            const b = body as { agentId?: unknown; enabled?: unknown };
-            if (typeof b?.agentId !== 'string' || typeof b.enabled !== 'boolean') throw new HttpError(400, tr('esperado {agentId, enabled}'));
-            if (!deps.autonomy!(b.agentId, b.enabled)) throw new HttpError(404, tr('agente não encontrado'));
+            const b = body as { agentId?: unknown; enabled?: unknown; threshold?: unknown; retry?: unknown };
+            if (typeof b?.agentId !== 'string' || (typeof b.enabled !== 'boolean' && b.retry !== true)) throw new HttpError(400, tr('esperado {agentId, enabled}'));
+            const threshold = typeof b.threshold === 'number' && b.threshold >= 50_000 && b.threshold <= 2_000_000 ? Math.floor(b.threshold) : undefined;
+            if (!deps.autonomy!(b.agentId, b.retry === true ? { retry: true } : { enabled: b.enabled === true, threshold })) throw new HttpError(404, tr('agente não encontrado'));
             sendJson(res, 200, { ok: true });
           })
           .catch((err) => fail(res, err));

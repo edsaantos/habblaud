@@ -297,6 +297,8 @@ class AgentView {
   private autoState: HTMLElement;
   private autoBtn: HTMLButtonElement;
   private autoLink: HTMLButtonElement;
+  private autoRetry: HTMLButtonElement;
+  private autoLimit: HTMLSelectElement;
   private filesSec: ReturnType<typeof section>;
   private filesBody: HTMLElement;
   private filesBtn: HTMLButtonElement;
@@ -437,19 +439,24 @@ class AgentView {
     // Modo autônomo: revezamento de sessões quando o contexto fica grande (server/autonomy/relay.ts).
     this.autoState = h('p', { class: 'ui-small' });
     this.autoBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', on: { click: () => this.toggleAutonomy() } }) as HTMLButtonElement;
-    // ▶ vai para a outra ponta do revezamento: a sessão anterior (já com o terminal aberto, para consultar) ou a nova
-    this.autoLink = h('button', {
+    // Limite por agente: vazio = o padrão do servidor (HABBLAUD_AUTONOMO_TOKENS). Com o modo ligado, trocar já vale.
+    this.autoLimit = h(
+      'select',
+      {
+        class: 'ui-day__select',
+        attrs: { 'aria-label': tr('Limite de contexto') },
+        on: { change: () => this.last?.autonomy && void this.ctx.store.setAutonomy(this.last.id, { enabled: true, threshold: this.autoThreshold() }) },
+      },
+      h('option', { text: tr('Limite: padrão'), attrs: { value: '' } }),
+      ...[200, 300, 500].map((k) => h('option', { text: tr('Limite: {0} mil', [k]), attrs: { value: String(k * 1000) } })),
+    ) as HTMLSelectElement;
+    // ▶ só na sessão que passou o trabalho adiante: abre o terminal dela, para consultar a conversa
+    this.autoLink = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: tr('▶ Consultar esta sessão'), on: { click: () => this.id && (ctx.terminals ?? this.terminal).open(this.id) } }) as HTMLButtonElement;
+    this.autoRetry = h('button', {
       class: 'ui-btn ui-btn--sm',
       type: 'button',
-      on: {
-        click: () => {
-          const m = this.last?.autonomy;
-          const id = m?.next ?? m?.from;
-          if (!id || !ctx.agent(id)) return;
-          ctx.select({ type: 'agent', id }, { focus: true });
-          if (!m?.next) (ctx.terminals ?? this.terminal).open(id);
-        },
-      },
+      text: tr('Abrir a sessão nova'),
+      on: { click: () => this.last && void this.ctx.store.setAutonomy(this.last.id, { retry: true }).then((error) => error && setText(this.autoState, error)) },
     }) as HTMLButtonElement;
     this.autoSec = section(
       tr('Modo autônomo'),
@@ -458,8 +465,7 @@ class AgentView {
         text: tr('Quando o contexto da sessão passa do limite, o Habblaud pede ao agente o prompt de continuidade e abre uma sessão nova nesta pasta. Atenção: manda mensagens e abre sessões sozinho, gastando tokens sem você por perto.'),
       }),
       this.autoState,
-      this.autoBtn,
-      this.autoLink,
+      h('div', { class: 'ui-timeline__more' }, this.autoLimit, this.autoBtn, this.autoLink, this.autoRetry),
     );
 
     // Arquivos: só busca quando pedem (o servidor relê o transcript da sessão e dos subagentes).
@@ -541,10 +547,14 @@ class AgentView {
     const a = this.last;
     if (!a) return;
     this.autoBtn.disabled = true;
-    void this.ctx.store.setAutonomy(a.id, !a.autonomy).then((error) => {
+    void this.ctx.store.setAutonomy(a.id, { enabled: !a.autonomy, threshold: this.autoThreshold() }).then((error) => {
       this.autoBtn.disabled = false;
       if (error) setText(this.autoState, error);
     });
+  }
+
+  private autoThreshold(): number | undefined {
+    return Number(this.autoLimit.value) || undefined;
   }
 
   /** Mostra a lista (buscando de novo, então também atualiza) ou recolhe a que está aberta. */
@@ -751,9 +761,13 @@ class AgentView {
     setHidden(this.autoSec.el, this.ctx.store.mock || a.kind !== 'main' || a.provider === 'codex' || !meta?.messages || !meta.pty?.enabled || access().remote);
     setText(this.autoBtn, a.autonomy ? tr('Desligar') : tr('Ligar'));
     if (!this.autoBtn.disabled) setText(this.autoState, autonomyLine(a));
-    const other = a.autonomy?.next ?? a.autonomy?.from;
-    setHidden(this.autoLink, !other || !this.ctx.agent(other));
-    setText(this.autoLink, a.autonomy?.next ? tr('▶ Ir para a sessão nova') : tr('▶ Consultar a sessão anterior'));
+    setHidden(this.autoLink, a.autonomy?.phase !== 'done');
+    setHidden(this.autoRetry, !a.autonomy?.retry);
+    // ligado: o seletor mostra o limite em vigor (se for um dos da lista); desligado: fica a escolha de quem vai ligar
+    if (a.autonomy && document.activeElement !== this.autoLimit) {
+      const v = String(a.autonomy.threshold);
+      this.autoLimit.value = [...this.autoLimit.options].some((o) => o.value === v) ? v : '';
+    }
 
     // Arquivos: mesma trava do terminal (mostra caminhos de fora do projeto).
     setHidden(this.filesSec.el, this.ctx.store.mock || !this.ctx.store.snapshot?.meta.terminal || !access().terminal);

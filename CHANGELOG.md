@@ -18,10 +18,14 @@ do meio (0.**3**.0).
   processos em segundo plano e devolver o prompt de continuidade; depois abre uma sessão nova na mesma pasta com esse
   prompt, já com o modo ligado. A sessão antiga fica aberta e parada. Para sozinho depois de
   `HABBLAUD_AUTONOMO_MAX` revezamentos seguidos (padrão 3), se algo continuar rodando em segundo plano ou se o agente
-  não responder em 30 minutos. Precisa das mensagens (plugin habblaud-mensagens) e de `HABBLAUD_PTY=1`. O personagem
-  da sessão antiga não cochila: continua passeando pelo escritório. Na gaveta, o botão **▶** leva da sessão nova à
-  anterior (com o terminal aberto, para consultar) e da anterior à nova. Se a sessão nova não aparecer no
-  escritório, a anterior recebe um aviso.
+  não responder em 30 minutos. Precisa das mensagens (plugin habblaud-mensagens) e de `HABBLAUD_PTY=1`. O limite
+  pode ser escolhido por agente na gaveta (padrão, 200, 300 ou 500 mil). O pedido espera o turno do agente acabar e
+  só interrompe um turno em curso com o contexto 50% acima do limite. A sessão nova começa conferindo a branch e as
+  alterações não commitadas contra o prompt. O estado do modo e cada prompt de continuidade ficam gravados em
+  `~/.habblaud/autonomy/`, então um reinício do Habblaud não perde a cadeia. Se a abertura falhar ou a sessão nova
+  não aparecer no escritório, a anterior recebe um aviso e o botão **Abrir a sessão nova** tenta de novo com o mesmo
+  prompt. O personagem da sessão antiga fica livre: passeia pelo escritório e cochila de vez em quando, e na gaveta
+  dele o botão **▶ Consultar esta sessão** abre o terminal da conversa.
 - **Contexto atual** nas estatísticas do agente: o tamanho do contexto da sessão, que é o que encarece cada turno.
 - **Arquivos do agente na gaveta de detalhes.** A seção **Arquivos** lista a mídia (imagem, vídeo, áudio, PDF)
   gravada durante a sessão e as pastas acessadas fora do repositório (leitura, escrita ou comando), somando os

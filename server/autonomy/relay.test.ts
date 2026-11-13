@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AgentAutonomy, AgentInfo } from '../../shared/types';
@@ -28,19 +29,20 @@ function agent(id: string, extra: Partial<AgentInfo> = {}): AgentInfo {
   } as AgentInfo;
 }
 
-function setup(maxRelays = 3) {
+function setup(maxRelays = 3, dir?: string) {
   let clock = 1_000;
   const agents: AgentInfo[] = [agent('m1')];
   const sent: string[] = [];
   const launched: string[] = [];
   const view = new Map<string, AgentAutonomy | undefined>();
   const notices: string[] = [];
-  const ctx = { reply: undefined as string | undefined, canSend: true };
+  const ctx = { reply: undefined as string | undefined, canSend: true, canLaunch: true };
   const relay = new Relay({
     agents: () => agents,
     send: (_id, text) => (ctx.canSend ? sent.push(text) > 0 : false),
     lastReply: () => ctx.reply,
     launch: (_a, prompt) => {
+      if (!ctx.canLaunch) throw new Error('sem terminal');
       launched.push(prompt);
       return `m${launched.length + 1}`;
     },
@@ -50,6 +52,7 @@ function setup(maxRelays = 3) {
     },
     threshold: 150_000,
     maxRelays,
+    dir,
     now: () => clock,
   });
   /** O agente respondeu: o turno acabou depois da mensagem. */
@@ -174,6 +177,47 @@ describe('modo autônomo', () => {
     mute.relay.tick();
     expect(mute.view.get('m1')).toMatchObject({ phase: 'armed' });
     expect(mute.view.get('m1')!.note).toBeTruthy();
+  });
+
+  it('ponto seguro: no meio de um turno só pede com o contexto muito acima do limite; o limite pode ser do agente', () => {
+    const c = setup();
+    c.agents[0].status = 'working';
+    c.relay.set('m1', true);
+    c.relay.tick();
+    expect(c.sent).toEqual([]);
+    c.agents[0].stats.contextTokens = 230_000;
+    c.relay.tick();
+    expect(c.sent).toHaveLength(1);
+
+    const own = setup();
+    own.relay.set('m1', true, 300_000);
+    own.relay.tick();
+    expect(own.sent).toEqual([]);
+    expect(own.view.get('m1')!.threshold).toBe(300_000);
+    own.relay.set('m1', true, 180_000);
+    own.relay.tick();
+    expect(own.sent).toHaveLength(1);
+  });
+
+  it('abertura falhou: guarda o prompt, e "abrir a sessão nova" tenta de novo; o estado sobrevive a um reinício', () => {
+    const tmp = tempDir();
+    const c = setup(3, tmp.dir);
+    c.ctx.canLaunch = false;
+    c.relay.set('m1', true);
+    c.relay.tick();
+    c.answer('m1', `<continuidade>${PROMPT}</continuidade>`);
+    expect(c.view.get('m1')).toMatchObject({ phase: 'paused', retry: true });
+    expect(readdirSync(join(tmp.dir, 'prompts'))).toHaveLength(1);
+
+    // Habblaud reiniciou: o estado volta do disco
+    const again = setup(3, tmp.dir);
+    again.relay.tick();
+    expect(again.view.get('m1')).toMatchObject({ phase: 'paused', retry: true });
+    expect(again.relay.retry('m1')).toBe(true);
+    expect(again.launched[0]).toContain(PROMPT);
+    expect(again.view.get('m1')).toMatchObject({ phase: 'done', next: 'm2' });
+    expect(again.relay.retry('m1')).toBe(false);
+    tmp.cleanup();
   });
 
   it('lê do transcript a última resposta escrita depois da mensagem', () => {

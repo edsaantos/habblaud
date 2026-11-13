@@ -145,6 +145,8 @@ export interface AgentAutonomy {
   from?: string;
   /** Id do agente da sessão nova (para quem esta passou o trabalho). */
   next?: string;
+  /** Dá para abrir a sessão nova de novo com o prompt já recebido (a abertura falhou ou ela não apareceu). */
+  retry?: boolean;
 }
 
 export interface AgentInfo {

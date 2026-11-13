@@ -1727,8 +1727,9 @@ export class Sim {
 
   /** Ocioso há muito tempo (cochila na mesa, nem sempre aceita convite)? Na visita, nunca: o tempo não veio do mundo. */
   longIdle(ch: Character, now: number): boolean {
-    // quem passou o trabalho adiante (modo autônomo) não cochila: fica livre pelo escritório
-    return !this.visit && ch.info.autonomy?.phase !== 'done' && isLongIdle(ch.info.status, ch.info.statusSince, now);
+    if (this.visit || !isLongIdle(ch.info.status, ch.info.statusSince, now)) return false;
+    // quem passou o trabalho adiante (modo autônomo) fica livre: passeia e, um trecho de 5 min a cada quatro, cochila
+    return ch.info.autonomy?.phase !== 'done' || (Math.floor(now / 300_000) + ch.info.seed) % 4 === 0;
   }
 
   /** Os personagens desenhados: os agentes e, na visita, o visitante (por último). */
