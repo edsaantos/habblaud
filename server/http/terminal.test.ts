@@ -74,6 +74,18 @@ describe('trava do terminal (config)', () => {
       tmp.cleanup();
     }
   });
+
+  it('modo demonstração: por HABBLAUD_DEMO=1 ou pela opção --demo (o `npm run demo`, que precisa rodar no cmd.exe)', () => {
+    const tmp = tempDir();
+    try {
+      const demo = (env: NodeJS.ProcessEnv, argv: string[]) => loadConfig({ HOME: tmp.dir, HABBLAUD_IN_DOCKER: '0', ...env }, argv).demo;
+      expect(demo({}, ['node', 'server/index.ts', '--dev'])).toBe(false);
+      expect(demo({ HABBLAUD_DEMO: '1' }, [])).toBe(true);
+      expect(demo({}, ['node', 'server/index.ts', '--dev', '--demo'])).toBe(true);
+    } finally {
+      tmp.cleanup();
+    }
+  });
 });
 
 // ------------------------------------------------------------------ servidor de teste

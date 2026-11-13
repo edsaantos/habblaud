@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false --exclude './client/**' server/index.ts --dev",
     "dev:client": "vite --config vite.config.ts",
-    "demo": "HABBLAUD_DEMO=1 npm run dev",
+    "demo": "npm run dev -- --demo",
     "demo:timeline": "tsx scripts/demo-timeline.ts",
     "shots:world": "node scripts/world-shots.mjs",
     "build": "npm run build:client && npm run build:server",

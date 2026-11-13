@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
-import { readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 import type { AddressInfo } from 'node:net';
@@ -126,8 +126,13 @@ describe.skipIf(!HAS_OPENSSL)('certificados (openssl)', () => {
     const tmp = tempDir();
     closers.push(tmp.cleanup);
     const paths = tlsPaths(join(tmp.dir, 'remote-tls'));
-    const r = ensureServerCert(paths, targets);
+    // O openssl trabalha dentro da pasta de destino (o rename para o lugar final não atravessa sistemas de arquivos).
+    const keyouts: string[] = [];
+    const run = ((cmd: string, args: string[], o: object) => (keyouts.push(args[args.indexOf('-keyout') + 1]), spawnSync(cmd, args, o))) as typeof spawnSync;
+    const r = ensureServerCert(paths, targets, { run });
     expect(r).toMatchObject({ createdCa: true, issued: true });
+    expect(keyouts.filter((k) => /[.]key$/.test(k)).map((k) => k.startsWith(paths.base))).toEqual([true, true]);
+    expect(readdirSync(paths.base).filter((n) => n.startsWith('.work-'))).toEqual([]);
     if (HAS_POSIX_MODES) expect(statSync(paths.caKey).mode & 0o777).toBe(0o600);
     if (HAS_POSIX_MODES) expect(statSync(paths.base).mode & 0o777).toBe(0o700);
     const cert = new X509Certificate(readFileSync(paths.serverCert));
