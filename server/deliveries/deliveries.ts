@@ -28,7 +28,7 @@ const MIN_TEXT = 30;
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch']);
 /** Caminhos de arquivo de ver citados na resposta: em links markdown ou soltos. */
 const LINK_RE = /\]\(\s*<?([^)\s>]+?\.(?:png|jpe?g|gif|webp|svg|pdf|mp4|mov|webm|html?))(?::\d+)?>?\s*\)/gi;
-const BARE_RE = /(?:^|[\s(`"'])(\/[^\s`"'()<>]+?\.(?:png|jpe?g|gif|webp|svg|pdf|mp4|mov|webm|html?))(?=$|[\s`"'),.;:!?])/gim;
+const BARE_RE = /(?:^|[\s(`"'])((?:\/|[A-Za-z]:[\\/])[^\s`"'()<>]+?\.(?:png|jpe?g|gif|webp|svg|pdf|mp4|mov|webm|html?))(?=$|[\s`"'),.;:!?])/gim;
 
 export interface SessionSource {
   path: string;
@@ -130,9 +130,10 @@ export function linkedFiles(text: string, project?: string): string[] {
     } catch {
       // fica como veio
     }
-    if (p.startsWith('file://')) p = p.slice(7);
-    if (/^[a-z]+:/i.test(p)) return;
-    if (!isAbsolute(p)) {
+    if (p.startsWith('file://')) p = p.slice(7).replace(/^\/(?=[A-Za-z]:[\\/])/, ''); // file:///C:/x vira C:/x
+    const drive = /^[A-Za-z]:[\\/]/.test(p); // unidade do Windows, não um endereço ("https:")
+    if (!drive && /^[a-z]+:/i.test(p)) return;
+    if (!drive && !isAbsolute(p)) {
       if (!project) return;
       p = join(project, p);
     }

@@ -49,6 +49,15 @@ do meio (0.**3**.0).
 - **Colegas de equipe (subagentes com nome) voltam a aparecer no escritório.** O resultado imediato do `Agent`
   ("Spawned successfully") era lido como término, e o personagem nunca entrava. Agora ele entra, trabalha e sai
   quando fica em silêncio, como os demais subagentes.
+- **Entregas no Windows: os arquivos voltam a aparecer.** Caminhos como `C:\...` eram recusados como inválidos, e
+  links na resposta do agente (inclusive `file:///C:/...`) eram tratados como endereço de internet. O filtro de
+  arquivos protegidos (`.ssh`, `.aws`, `.env`, chaves) agora também vale para caminhos com `\`, e pastas de rede
+  (`\\servidor\pasta`) não são abertas.
+- **Arquivos do agente: caminhos com espaço entram na lista.** Um caminho entre aspas num comando, como
+  `"C:\Users\voce\Meus Videos\in.mp4"`, era cortado no espaço e descartado. No macOS e no Linux, `/dev` e `/proc`
+  não aparecem mais como pasta acessada por causa de `2>/dev/null`.
+- **Arquivos no macOS: abrir uma pasta só a mostra no Finder.** Uma pasta chamada `Algo.app` é um aplicativo, e o
+  clique o executava.
 
 ## [1.0.3] - 2026-10-16
 

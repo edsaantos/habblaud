@@ -5,7 +5,7 @@
 // Node puro e sem dependências: também é importado pelo auxiliar do host (via tsx).
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { DeliveryAttachmentKind } from '../../shared/types';
 import { tr } from '../../shared/i18n';
 
@@ -38,6 +38,9 @@ const TYPES: Readonly<Record<string, { kind: DeliveryAttachmentKind; type: strin
 const SECRET_DIRS = /(^|\/)(\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.docker|\.password-store|\.config\/gh|\.config\/gcloud|Keychains|\.habblaud\/remote-tls)(\/|$)/i;
 const SECRET_NAMES = /(^|\/)(\.env[^/]*|id_[a-z0-9]+|[^/]*\.(pem|key|p12|pfx|keystore|jks|kdbx)|[^/]*(secret|credential|password|senha|token)[^/]*)$/i;
 
+/** Barras do Windows viram "/": as checagens daqui (segredos, "..", pastas conhecidas) só conhecem "/". */
+export const toSlashes = (p: string): string => p.replace(/\\/g, '/');
+
 export function extensionOf(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? '';
   const dot = base.lastIndexOf('.');
@@ -51,16 +54,20 @@ export function fileType(path: string): { kind: DeliveryAttachmentKind; type: st
 
 /** Motivo para NÃO mostrar o caminho (só olhando o texto), ou undefined. */
 export function pathProblem(path: string): string | undefined {
-  if (!path || path.includes('\0') || !path.startsWith('/') || /(^|\/)\.\.(\/|$)/.test(path)) return tr('caminho inválido');
+  const p = toSlashes(path);
+  // Absoluto: "/..." ou unidade do Windows ("C:\..."; o servidor no Docker também recebe caminhos de um host Windows).
+  // "//servidor/pasta" (rede do Windows) fica de fora: só de conferir o arquivo o computador já se apresentaria ao servidor.
+  if (!path || path.includes('\0') || !/^(\/(?!\/)|[A-Za-z]:\/)/.test(p) || /(^|\/)\.\.(\/|$)/.test(p)) return tr('caminho inválido');
   if (!fileType(path)) return tr('tipo de arquivo que não se mostra aqui');
-  if (SECRET_DIRS.test(path) || SECRET_NAMES.test(path)) return tr('arquivo protegido');
+  if (SECRET_DIRS.test(p) || SECRET_NAMES.test(p)) return tr('arquivo protegido');
   return undefined;
 }
 
 /** Confere no disco (links resolvidos, tamanho, arquivo comum). Devolve o caminho real ou o motivo. */
 export function checkFile(
   path: string,
-  fs: { realpath(p: string): string; stat(p: string): { isFile(): boolean; size: number } } = { realpath: realpathSync, stat: statSync },
+  // .native: no Windows expande os nomes curtos ("SSH~1" é a ".ssh"), que o realpathSync comum devolve como vieram.
+  fs: { realpath(p: string): string; stat(p: string): { isFile(): boolean; size: number } } = { realpath: realpathSync.native, stat: statSync },
 ): { path: string; size: number } | { error: string } {
   const bad = pathProblem(path);
   if (bad) return { error: bad };
@@ -99,10 +106,15 @@ export function insideKnownFolder(
   path: string,
   opts: { accountDirs: readonly string[]; roots: readonly string[]; exists?: (p: string) => boolean },
 ): boolean {
-  if (opts.roots.some((r) => r && path.startsWith(`${r.replace(/\/+$/, '')}/`))) return true;
+  // No Windows o disco não diferencia maiúsculas ("c:\" e "C:\" são a mesma unidade).
+  const fold = (s: string) => (/^[A-Za-z]:\//.test(s) ? s.toLowerCase() : s);
+  const p = toSlashes(path);
+  if (opts.roots.some((r) => r && fold(p).startsWith(`${fold(toSlashes(r)).replace(/\/+$/, '')}/`))) return true;
   const exists = opts.exists ?? existsSync;
+  const up = (s: string) => s.slice(0, s.lastIndexOf('/'));
   // Mesma codificação de sources/watcher.ts (encodeCwd): todo caractere não alfanumérico vira "-".
-  for (let dir = dirname(path); dir.split('/').filter(Boolean).length >= 2; dir = dirname(dir)) {
+  // Pelo menos dois níveis abaixo da raiz (a letra da unidade não conta como nível).
+  for (let dir = up(p); dir.replace(/^[A-Za-z]:/, '').split('/').filter(Boolean).length >= 2; dir = up(dir)) {
     const encoded = dir.replace(/[^a-zA-Z0-9]/g, '-');
     if (opts.accountDirs.some((acc) => exists(join(acc, 'projects', encoded)))) return true;
   }

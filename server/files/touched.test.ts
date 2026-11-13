@@ -2,7 +2,7 @@ import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { tempDir, writeLines } from '../test/fixtures';
-import { pathTokens, toSystemPath, touchedFiles, touchesOf } from './touched';
+import { openCommand, pathTokens, toSystemPath, touchedFiles, touchesOf } from './touched';
 
 const line = (cwd: string, name: string, input: Record<string, unknown>, timestamp = '2026-01-01T00:00:00.000Z') =>
   JSON.stringify({ type: 'assistant', cwd, timestamp, message: { content: [{ type: 'tool_use', id: 't', name, input }] } });
@@ -13,6 +13,18 @@ describe('arquivos do agente', () => {
     expect(toSystemPath('/c/Users/x', false)).toBe('/c/Users/x');
     expect(pathTokens('ffmpeg -i in.mov "C:\\out\\v.mp4" && curl https://x.dev/a.png > /dev/null; ls *.png', true)).toEqual(['in.mov', 'C:\\out\\v.mp4']);
     expect(pathTokens('cat /etc/hosts', false)).toEqual(['/etc/hosts']);
+  });
+
+  it('caminho com espaço entre aspas entra inteiro; /dev e /proc ficam de fora', () => {
+    expect(pathTokens('ffmpeg -i "C:\\Users\\voce\\Meus Videos\\in.mp4" out.mp4', true)).toEqual(['C:\\Users\\voce\\Meus Videos\\in.mp4', 'C:\\Users\\voce\\Meus', 'Videos\\in.mp4', 'out.mp4']);
+    expect(pathTokens("cp '/home/ana/Meus Docs/a.png' /tmp/b 2>/dev/null; cat /proc/cpuinfo", false)).toEqual(['/home/ana/Meus Docs/a.png', '/home/ana/Meus', 'Docs/a.png', '/tmp/b']);
+  });
+
+  it('abrir no sistema: no macOS a pasta é só mostrada no Finder (uma "Algo.app" seria executada)', () => {
+    expect(openCommand('/x/Algo.app', true, 'darwin')).toEqual(['open', ['-R', '/x/Algo.app']]);
+    expect(openCommand('/x/a.png', false, 'darwin')).toEqual(['open', ['/x/a.png']]);
+    expect(openCommand('C:\\x', true, 'win32')).toEqual(['explorer.exe', ['C:\\x']]);
+    expect(openCommand('/x', true, 'linux')).toEqual(['xdg-open', ['/x']]);
   });
 
   it('linha sem tool_use ou sem cwd não rende nada', () => {

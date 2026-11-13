@@ -48,9 +48,12 @@ const isAbs = (p: string, win: boolean): boolean => /^~[\\/]/.test(p) || (win ? 
 /** Pedaços de um texto livre que parecem caminhos: absolutos, ou com extensão de mídia. */
 export function pathTokens(text: string, win = process.platform === 'win32'): string[] {
   const out: string[] = [];
-  for (const raw of text.split(/[\s"'`|;&<>()=,]+/)) {
+  // O que está entre aspas e tem espaço (ou outro separador) entra inteiro, antes dos pedaços: "C:\Meus Videos\a.mp4".
+  const quoted = [...text.matchAll(/"([^"\n]+)"|'([^'\n]+)'/g)].map((m) => m[1] ?? m[2]).filter((q) => /[\s|;&<>()=,]/.test(q));
+  for (const raw of [...quoted, ...text.split(/[\s"'`|;&<>()=,]+/)]) {
     const t = raw.replace(/[.:]+$/, '');
     if (t.length < 3 || t.length > 400 || t.includes('://') || /[*?$%{}]/.test(t)) continue;
+    if (/^\/(dev|proc)\//.test(t)) continue; // `2>/dev/null` não é uma pasta acessada
     if (isAbs(t, win) || extname(t).toLowerCase() in MEDIA) out.push(t);
   }
   return out;
@@ -179,10 +182,18 @@ export function summarize(touches: readonly Touch[], sessionStart: number): Touc
  * do agente (quem chama confere): abrir um arquivo qualquer seria executar o que o agente escreveu.
  */
 export function openInSystem(path: string): void {
-  const bin = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  const [bin, args] = openCommand(path, !!statSync(path, { throwIfNoEntry: false })?.isDirectory());
   // sem shell; o explorer.exe devolve código 1 mesmo quando abre
   // (sem windowsHide: com ele a janela da pasta abre escondida)
-  execFile(bin, [path], () => undefined);
+  execFile(bin, args, () => undefined);
+}
+
+/** Programa e argumentos de `openInSystem`. */
+export function openCommand(path: string, isDir: boolean, platform: string = process.platform): [string, string[]] {
+  if (platform === 'win32') return ['explorer.exe', [path]];
+  // macOS: uma pasta "Algo.app" é um aplicativo e `open` o executaria; -R só a mostra no Finder.
+  if (platform === 'darwin') return ['open', isDir ? ['-R', path] : [path]];
+  return ['xdg-open', [path]];
 }
 
 /** O caminho é um item da lista (mídia ou pasta de fora)? */
