@@ -30,6 +30,15 @@ export function findExecutable(name: string, env: NodeJS.ProcessEnv = process.en
 }
 
 /**
+ * O executável é um .cmd ou .bat (o `claude.cmd` de uma instalação por npm)? O Windows roda esses pelo cmd.exe, que
+ * relê os argumentos como linha de comando: `&`, `|`, `%VAR%` e quebras de linha de um texto livre viram sintaxe de
+ * shell. Só serve para argumentos fixos ou validados.
+ */
+export function runsThroughCmd(file: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === 'win32' && /\.(cmd|bat)$/i.test(file);
+}
+
+/**
  * O executável do Claude Code: HABBLAUD_CLAUDE_BIN (um caminho, ou um nome procurado
  * no PATH) ou o `claude` do PATH. undefined se não achar.
  */

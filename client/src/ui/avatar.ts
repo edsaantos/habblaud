@@ -14,6 +14,8 @@ function avatarData(agent: AvatarSource, scale: number): { url: string; w: numbe
   if (!entry) {
     const c = avatarCanvas(agent.seed, { look: agent.look, sub: agent.kind === 'sub', scale, parts: agent.parts });
     entry = { url: c.toDataURL('image/png'), w: c.width, h: c.height };
+    // shortcut: esvazia tudo ao passar de 2000 avatares (página aberta por dias); trocar por LRU se o redesenho pesar
+    if (cache.size > 2000) cache.clear();
     cache.set(key, entry);
   }
   return entry;

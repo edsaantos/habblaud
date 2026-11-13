@@ -49,6 +49,27 @@ do meio (0.**3**.0).
 - **Colegas de equipe (subagentes com nome) voltam a aparecer no escritório.** O resultado imediato do `Agent`
   ("Spawned successfully") era lido como término, e o personagem nunca entrava. Agora ele entra, trabalha e sai
   quando fica em silêncio, como os demais subagentes.
+- **Modo autônomo: trocar o limite numa sessão que já passou o trabalho não abre mais uma segunda sessão nova.**
+  Mexer no limite ou em **Vigiar também os subagentes** com o modo parado ou concluído rearmava a sessão antiga (e
+  zerava o teto de revezamentos). Agora essas opções ficam desativadas nesses estados: rearmar é desligar e ligar.
+- **Modo autônomo: o prompt de continuidade é reconhecido mesmo com texto depois dele.** Se o agente repetia a frase
+  "entre `<continuidade>` e `</continuidade>`" depois do prompt, ou rodava uma ferramenta e terminava com "Pronto.",
+  o modo esperava 30 minutos e parava.
+- **Modo autônomo no Windows com o Claude Code instalado como `claude.cmd`:** a sessão nova não é mais aberta por
+  ali, porque o prompt passaria pelo `cmd.exe`. O modo para com um aviso pedindo o `HABBLAUD_CLAUDE_BIN` apontado
+  para o `claude.exe`.
+- **Gaveta: o limite e "Vigiar também os subagentes" não passam mais de um agente para o próximo.** Abrir um agente
+  com o modo ligado e depois outro desligado mostrava no segundo as opções do primeiro, e **Ligar** as usava.
+- **Gaveta: os erros do modo autônomo ficam na tela** até a ação seguinte, em vez de sumir no redesenho, e são
+  anunciados a leitores de tela. **Abrir a sessão nova** fica desativado enquanto o pedido roda.
+- **Arquivos do agente: falha ao abrir avisa.** Um item apagado ou movido mostra um aviso em vez de parecer um
+  clique perdido. Pelo acesso remoto os itens não são mais botões (o computador nunca abre nada por lá), e em telas
+  de toque o botão de copiar o caminho fica sempre à vista.
+- **Modo autônomo, ajustes menores:** o estado é gravado por arquivo temporário e só para o dono (uma queda no meio
+  não o corrompe); `HABBLAUD_AUTONOMO_TOKENS` abaixo de 50 mil vale 50 mil; a etiqueta do modo sai de um agente que
+  ficou offline.
+- **Modo demonstração só liga pelo próprio computador.** Com `HABBLAUD_HOST=0.0.0.0`, outro aparelho da rede
+  conseguia ligar ou desligar a demonstração.
 - **Entregas no Windows: os arquivos voltam a aparecer.** Caminhos como `C:\...` eram recusados como inválidos, e
   links na resposta do agente (inclusive `file:///C:/...`) eram tratados como endereço de internet. O filtro de
   arquivos protegidos (`.ssh`, `.aws`, `.env`, chaves) agora também vale para caminhos com `\`, e pastas de rede

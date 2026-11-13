@@ -100,7 +100,7 @@ const MEDIA_ICON: Record<MediaKind, string> = { image: ICONS.fileImage, video: I
  * pastas fora do repositório. O clique abre o item no computador (`open`); tipo, tamanho, data, ação e caminho
  * aparecem ao parar o mouse em cima.
  */
-function filesView(f: TouchedFiles | null, open: (path: string) => void): HTMLElement[] {
+function filesView(f: TouchedFiles | null, open: ((path: string) => void) | null): HTMLElement[] {
   const note = (text: string) => h('p', { class: 'ui-muted ui-small', text });
   if (!f) return [note(tr('Não foi possível ler os arquivos deste agente.'))];
   const item = (icon: string, name: string, details: (string | false)[], path: string) => {
@@ -109,7 +109,7 @@ function filesView(f: TouchedFiles | null, open: (path: string) => void): HTMLEl
     return h(
       'li',
       { class: 'ui-files__tile' },
-      h('button', { class: 'ui-files__open', type: 'button', title: [name, ...details.filter(Boolean), path].join('\n'), on: { click: () => open(path) } }, pic, h('span', { class: 'ui-files__name', text: name })),
+      h('button', { class: 'ui-files__open', type: 'button', attrs: { disabled: !open }, title: [name, ...details.filter(Boolean), path].join('\n'), on: { click: () => open?.(path) } }, pic, h('span', { class: 'ui-files__name', text: name })),
       copyButton(() => path, tr('Copiar caminho')),
     );
   };
@@ -324,6 +324,11 @@ class AgentView {
   private autoSubs: HTMLInputElement;
   private filesSec: ReturnType<typeof section>;
   private filesBody: HTMLElement;
+  private filesNote: HTMLElement;
+  /** Erro da última ação do modo autônomo: fica na linha de estado até a ação seguinte, a troca de agente ou o modo andar. */
+  private autoError = '';
+  /** O estado do modo quando o erro chegou: mudou no servidor, o erro sai (senão esconderia o andamento do revezamento). */
+  private autoErrorAt = '';
   private filesBtn: HTMLButtonElement;
   private teamSec: ReturnType<typeof section>;
   private team: KeyedList<AgentInfo>;
@@ -460,7 +465,7 @@ class AgentView {
     this.timeline = new KeyedList<Activity>(tl, { key: (a) => a.id, create: createTimelineItem, update: (li, a) => updateTimelineItem(li, a, ctx.now()) });
 
     // Modo autônomo: revezamento de sessões quando o contexto fica grande (server/autonomy/relay.ts).
-    this.autoState = h('p', { class: 'ui-small' });
+    this.autoState = h('p', { class: 'ui-small', attrs: { role: 'status' } });
     this.autoBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', on: { click: () => this.toggleAutonomy() } }) as HTMLButtonElement;
     // Limite por agente: vazio = o padrão do servidor (HABBLAUD_AUTONOMO_TOKENS). Com o modo ligado, trocar já vale.
     this.autoLimit = h(
@@ -480,7 +485,7 @@ class AgentView {
       class: 'ui-btn ui-btn--sm',
       type: 'button',
       text: tr('Abrir a sessão nova'),
-      on: { click: () => this.last && void this.ctx.store.setAutonomy(this.last.id, { retry: true }).then((error) => error && setText(this.autoState, error)) },
+      on: { click: () => this.autoAct(this.autoRetry, { retry: true }) },
     }) as HTMLButtonElement;
     this.autoSec = section(
       tr('Modo autônomo'),
@@ -496,7 +501,8 @@ class AgentView {
     // Arquivos: só busca quando pedem (o servidor relê o transcript da sessão e dos subagentes).
     this.filesBody = h('div', { class: 'ui-files' });
     this.filesBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: tr('Mostrar'), on: { click: () => this.loadFiles() } }) as HTMLButtonElement;
-    this.filesSec = section(tr('Arquivos'), h('p', { class: 'ui-muted ui-small', text: tr('Mídia gravada na sessão e pastas acessadas fora do repositório.') }), this.filesBody, this.filesBtn);
+    this.filesNote = h('p', { class: 'ui-small', attrs: { role: 'status' } });
+    this.filesSec = section(tr('Arquivos'), h('p', { class: 'ui-muted ui-small', text: tr('Mídia gravada na sessão e pastas acessadas fora do repositório.') }), this.filesNote, this.filesBody, this.filesBtn);
 
     this.sessionValue = h('span', { class: 'ui-mono-inline' });
     this.linesPlus = h('span', { class: 'ui-plus' });
@@ -564,23 +570,39 @@ class AgentView {
     this.shells.clear();
     this.actDetails.open = false;
     this.filesBody.replaceChildren();
+    setText(this.filesNote, '');
     setText(this.filesBtn, tr('Mostrar'));
+    // A mesma gaveta serve a todos os agentes: as opções do modo autônomo não passam de um para o outro.
+    this.autoLimit.value = '';
+    this.autoSubs.checked = false;
+    this.autoError = '';
     this.loadHistory();
   }
 
-  private toggleAutonomy(): void {
-    const a = this.last;
-    if (!a) return;
-    this.autoBtn.disabled = true;
-    void this.ctx.store.setAutonomy(a.id, { enabled: !a.autonomy, threshold: this.autoThreshold(), subs: this.autoSubs.checked }).then((error) => {
-      this.autoBtn.disabled = false;
-      if (error) setText(this.autoState, error);
+  /** Manda uma ação do modo autônomo; o erro do servidor fica na linha de estado (render) até a ação seguinte. */
+  private autoAct(btn: HTMLButtonElement | null, op: Parameters<UiContext['store']['setAutonomy']>[1]): void {
+    const id = this.last?.id;
+    if (!id) return;
+    this.autoError = '';
+    if (btn) btn.disabled = true;
+    void this.ctx.store.setAutonomy(id, op).then((error) => {
+      if (btn) btn.disabled = false;
+      if (id === this.id) {
+        this.autoError = error ?? '';
+        this.autoErrorAt = JSON.stringify(this.last?.autonomy);
+        if (error) setText(this.autoState, error); // já, sem esperar o próximo redesenho
+      }
+      this.ctx.invalidate();
     });
+  }
+
+  private toggleAutonomy(): void {
+    this.autoAct(this.autoBtn, { enabled: !this.last?.autonomy, threshold: this.autoThreshold(), subs: this.autoSubs.checked });
   }
 
   /** Com o modo ligado, trocar o limite ou a vigia dos subagentes já vale. */
   private autoOptions(): void {
-    if (this.last?.autonomy) void this.ctx.store.setAutonomy(this.last.id, { enabled: true, threshold: this.autoThreshold(), subs: this.autoSubs.checked });
+    if (this.last?.autonomy) this.autoAct(null, { enabled: true, threshold: this.autoThreshold(), subs: this.autoSubs.checked });
   }
 
   private autoThreshold(): number | undefined {
@@ -589,6 +611,7 @@ class AgentView {
 
   /** Mostra a lista (buscando de novo, então também atualiza) ou recolhe a que está aberta. */
   private loadFiles(): void {
+    setText(this.filesNote, '');
     if (this.filesBody.childElementCount) {
       this.filesBody.replaceChildren();
       setText(this.filesBtn, tr('Mostrar'));
@@ -596,11 +619,20 @@ class AgentView {
     }
     const id = this.id;
     this.filesBtn.disabled = true;
+    // Pelo acesso remoto o servidor nunca abre nada no computador: os itens ficam só para ver e copiar o caminho.
+    const open = access().remote
+      ? null
+      : (path: string) => {
+          setText(this.filesNote, '');
+          void this.ctx.store.openAgentFile(id, path).then((ok) => {
+            if (!ok && id === this.id) setText(this.filesNote, tr('Não deu para abrir: o item pode ter sido apagado ou movido. Recolha e mostre de novo para atualizar a lista.'));
+          });
+        };
     void this.ctx.store.agentFiles(id).then((f) => {
       this.filesBtn.disabled = false;
       if (id !== this.id) return;
       setText(this.filesBtn, tr('Recolher'));
-      this.filesBody.replaceChildren(...filesView(f, (path) => void this.ctx.store.openAgentFile(id, path)));
+      this.filesBody.replaceChildren(...filesView(f, open));
     });
   }
 
@@ -790,7 +822,10 @@ class AgentView {
     const meta = this.ctx.store.snapshot?.meta;
     setHidden(this.autoSec.el, this.ctx.store.mock || a.kind !== 'main' || a.provider === 'codex' || !meta?.messages || !meta.pty?.enabled || access().remote);
     setText(this.autoBtn, a.autonomy ? tr('Desligar') : tr('Ligar'));
-    if (!this.autoBtn.disabled) setText(this.autoState, autonomyLine(a));
+    if (this.autoError && JSON.stringify(a.autonomy) !== this.autoErrorAt) this.autoError = '';
+    setText(this.autoState, this.autoError || autonomyLine(a));
+    // parada ou já passou o trabalho: as opções só voltam a valer depois de desligar e ligar
+    this.autoLimit.disabled = this.autoSubs.disabled = a.autonomy?.phase === 'done' || a.autonomy?.phase === 'paused';
     setHidden(this.autoLink, a.autonomy?.phase !== 'done');
     setHidden(this.autoRetry, !a.autonomy?.retry);
     // ligado: o seletor mostra o limite em vigor (se for um dos da lista); desligado: fica a escolha de quem vai ligar

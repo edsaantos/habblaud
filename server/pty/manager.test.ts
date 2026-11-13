@@ -10,6 +10,7 @@ import {
   findExecutable,
   fixSpawnHelper,
   isExecutableFile,
+  runsThroughCmd,
   MAX_PTYS,
   PtyError,
   PtyManager,
@@ -299,6 +300,25 @@ describe('ptyRequestProblem', () => {
 
 describe('carregar o node-pty e achar o claude', () => {
   const unix = process.platform !== 'win32';
+
+  it('sessão com prompt (modo autônomo): recusa o claude.cmd no Windows, onde o prompt passaria pelo cmd.exe', () => {
+    expect(runsThroughCmd('C:\\npm\\claude.cmd', 'win32')).toBe(true);
+    expect(runsThroughCmd('C:\\npm\\CLAUDE.BAT', 'win32')).toBe(true);
+    expect(runsThroughCmd('C:\\bin\\claude.exe', 'win32')).toBe(false);
+    expect(runsThroughCmd('/usr/local/bin/claude.cmd', 'linux')).toBe(false);
+    const s = setup();
+    expect(s.manager.createWithPrompt({ cwd: tmpdir(), prompt: 'a & b' }).agentId).toMatch(/^acc:\d+$/);
+    expect(s.spawned[0].args).toEqual(['--', 'a & b']);
+    if (unix) return;
+    const dir = mkdtempSync(join(tmpdir(), 'habblaud-pty-'));
+    writeFileSync(join(dir, 'claude.cmd'), '');
+    const cmd = setup({ claudeBin: join(dir, 'claude.cmd') });
+    expect(() => cmd.manager.createWithPrompt({ cwd: tmpdir(), prompt: 'a & b' })).toThrow(/claude\.cmd.*HABBLAUD_CLAUDE_BIN/);
+    expect(cmd.spawned).toEqual([]);
+    // o terminal comum (sem texto livre nos argumentos) continua abrindo
+    expect(cmd.manager.create({ cwd: tmpdir() }).agentId).toMatch(/^acc:\d+$/);
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   /** Pasta temporária, apagada no fim. */
   function withDir(fn: (dir: string) => void | Promise<void>) {

@@ -12,7 +12,7 @@
 import { chmodSync, readFileSync, statSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import type { PtyInfo, PtyStatus } from '../../shared/types';
 import { frame } from '../http/sse';
 import { errMsg, log } from '../log';
@@ -20,9 +20,9 @@ import { pidAlive } from '../sources/registry';
 import { readProcInfo, sameProcess, type ProcInfo, type RegisteredProc } from './procinfo';
 import { killWithConsoleReset } from './winkill';
 import { tr } from '../../shared/i18n';
-import { isExecutableFile } from '../claude-bin';
+import { isExecutableFile, runsThroughCmd } from '../claude-bin';
 
-export { claudeBinFrom, findExecutable, isExecutableFile } from '../claude-bin';
+export { claudeBinFrom, findExecutable, isExecutableFile, runsThroughCmd } from '../claude-bin';
 
 /** O que o gerenciador usa do node-pty (permite trocar nos testes). */
 export interface PtyProcess {
@@ -228,6 +228,9 @@ export class PtyManager {
 
   /** Sessão nova que já começa com um pedido (modo autônomo): `claude [--permission-mode <modo>] -- <prompt>`. */
   createWithPrompt(p: { cwd: string; account?: string; prompt: string; permissionMode?: string }): PtyInfo {
+    if (runsThroughCmd(this.opts.claudeBin)) {
+      throw new PtyError(503, tr('o Claude Code está instalado como {0}, que o Windows roda pelo cmd.exe: aponte o HABBLAUD_CLAUDE_BIN para o claude.exe', [basename(this.opts.claudeBin)]));
+    }
     const args = [...(p.permissionMode ? ['--permission-mode', p.permissionMode] : []), '--', p.prompt];
     return this.spawn(this.plan(p, this.takeovers.size), { args });
   }
