@@ -147,6 +147,8 @@ export interface AgentAutonomy {
   next?: string;
   /** Dá para abrir a sessão nova de novo com o prompt já recebido (a abertura falhou ou ela não apareceu). */
   retry?: boolean;
+  /** Vigia também os subagentes (avisa o principal quando um deles passa do limite). */
+  subs?: boolean;
 }
 
 export interface AgentInfo {
@@ -471,7 +473,7 @@ export interface TouchedFiles {
   /** Mídia gravada durante a sessão, da mais recente para a mais antiga. */
   media: { path: string; name: string; kind: MediaKind; size: number; at: number; /** Criada na sessão (senão, alterada). */ created: boolean }[];
   /** Pastas fora do repositório: lidas, escritas ou citadas em comandos (`count` = quantas vezes). */
-  outside: { path: string; read: boolean; write: boolean; command: boolean; count: number }[];
+  outside: { path: string; read: boolean; write: boolean; command: boolean; count: number; /** Data de modificação da pasta. */ at?: number }[];
 }
 
 // ------------------------------------------------------------------ mod do Claude Code

@@ -398,7 +398,7 @@ const api = createApiHandler({
   dictation,
   deliveries,
   files: deliveryFiles,
-  autonomy: relay ? (agentId, op) => ('retry' in op ? relay.retry(agentId) : relay.set(agentId, op.enabled, op.threshold)) : undefined,
+  autonomy: relay ? (agentId, op) => ('retry' in op ? relay.retry(agentId) : relay.set(agentId, op.enabled, op.threshold, op.subs)) : undefined,
   touched: config.terminal ? touchedOf : undefined,
   // No Docker o servidor não enxerga a área de trabalho do computador: não há o que abrir.
   openTouched:

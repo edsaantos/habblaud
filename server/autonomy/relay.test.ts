@@ -199,6 +199,21 @@ describe('modo autônomo', () => {
     expect(own.sent).toHaveLength(1);
   });
 
+  it('vigiando os subagentes: avisa o principal uma vez por subagente acima do limite', () => {
+    const c = setup();
+    c.agents[0].stats.contextTokens = 10_000;
+    c.agents.push(agent('s1', { kind: 'sub', parentId: 'm1', status: 'working', name: 'Beto' }), agent('s2', { kind: 'sub', parentId: 'outro', status: 'working' }));
+    c.relay.set('m1', true);
+    c.relay.tick();
+    expect(c.sent).toEqual([]);
+    c.relay.set('m1', true, undefined, true);
+    c.relay.tick();
+    c.relay.tick();
+    expect(c.sent).toHaveLength(1);
+    expect(c.sent[0]).toContain('Beto');
+    expect(c.view.get('m1')).toMatchObject({ phase: 'armed', subs: true });
+  });
+
   it('abertura falhou: guarda o prompt, e "abrir a sessão nova" tenta de novo; o estado sobrevive a um reinício', () => {
     const tmp = tempDir();
     const c = setup(3, tmp.dir);

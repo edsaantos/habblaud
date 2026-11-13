@@ -25,12 +25,16 @@ do meio (0.**3**.0).
   `~/.habblaud/autonomy/`, então um reinício do Habblaud não perde a cadeia. Se a abertura falhar ou a sessão nova
   não aparecer no escritório, a anterior recebe um aviso e o botão **Abrir a sessão nova** tenta de novo com o mesmo
   prompt. O personagem da sessão antiga fica livre: passeia pelo escritório e cochila de vez em quando, e na gaveta
-  dele o botão **▶ Consultar esta sessão** abre o terminal da conversa.
+  dele o botão **▶ Consultar esta sessão** abre o terminal da conversa. Opção **Vigiar também os subagentes**: quando
+  um subagente passa do limite, o agente principal recebe uma mensagem (uma por subagente) pedindo para trocá-lo por
+  outro com um resumo.
 - **Contexto atual** nas estatísticas do agente: o tamanho do contexto da sessão, que é o que encarece cada turno.
 - **Arquivos do agente na gaveta de detalhes.** A seção **Arquivos** lista a mídia (imagem, vídeo, áudio, PDF)
   gravada durante a sessão e as pastas acessadas fora do repositório (leitura, escrita ou comando), somando os
-  subagentes da sessão, em duas listas recolhíveis. Clique num item para abri-lo no computador (a pasta no
-  gerenciador de arquivos, a mídia no programa padrão) ou use o botão de copiar o caminho. Só no próprio computador.
+  subagentes da sessão, em duas grades recolhíveis de ícones, como uma pasta do computador: as colunas acompanham a
+  largura da gaveta e o que não cabe rola. Tipo, tamanho, data de modificação, ação e caminho aparecem ao parar o
+  mouse no item. Clique num item para abri-lo no computador (a pasta no gerenciador de arquivos, a mídia no programa
+  padrão) ou use o botão de copiar o caminho, que aparece no canto do item. Só no próprio computador.
 - **Teto de subagentes visíveis por sala** em Configurações › Escritório (5, 10, 15, 20 ou todos; padrão 10). Acima
   do teto, o subagente continua na lista lateral e entra na sala quando abrir vaga.
 

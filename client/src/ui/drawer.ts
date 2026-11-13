@@ -93,25 +93,47 @@ export function autonomyLine(a: AgentInfo): string {
 
 const MEDIA_LABEL: Record<MediaKind, () => string> = { image: () => tr('imagem'), video: () => tr('vídeo'), audio: () => tr('áudio'), pdf: () => 'PDF' };
 
+const MEDIA_ICON: Record<MediaKind, string> = { image: ICONS.fileImage, video: ICONS.fileVideo, audio: ICONS.fileAudio, pdf: ICONS.filePdf };
+
 /**
- * Duas listas recolhíveis, cada uma com a sua rolagem: mídia gravada e pastas fora do repositório.
- * O clique abre o item no computador (`open`); o caminho completo fica na dica e no botão de copiar.
+ * Duas grades recolhíveis, como uma pasta do computador (ícone e nome), cada uma com a sua rolagem: mídia gravada e
+ * pastas fora do repositório. O clique abre o item no computador (`open`); tipo, tamanho, data, ação e caminho
+ * aparecem ao parar o mouse em cima.
  */
 function filesView(f: TouchedFiles | null, open: (path: string) => void): HTMLElement[] {
   const note = (text: string) => h('p', { class: 'ui-muted ui-small', text });
   if (!f) return [note(tr('Não foi possível ler os arquivos deste agente.'))];
-  const item = (label: string, meta: string, path: string) =>
-    h(
+  const item = (icon: string, name: string, details: (string | false)[], path: string) => {
+    const pic = h('span', { class: 'ui-files__icon' });
+    pic.innerHTML = icon;
+    return h(
       'li',
-      {},
-      h('button', { class: 'ui-files__open', type: 'button', title: tr('Abrir no computador: {0}', [path]), on: { click: () => open(path) } }, h('span', { class: 'ui-mono-inline', text: label }), h('span', { class: 'ui-muted ui-small', text: ` · ${meta}` })),
+      { class: 'ui-files__tile' },
+      h('button', { class: 'ui-files__open', type: 'button', title: [name, ...details.filter(Boolean), path].join('\n'), on: { click: () => open(path) } }, pic, h('span', { class: 'ui-files__name', text: name })),
       copyButton(() => path, tr('Copiar caminho')),
     );
+  };
   const group = (title: string, items: HTMLElement[], empty: string) =>
     h('details', { class: 'ui-files__group', attrs: { open: '' } }, h('summary', { text: title }), items.length ? h('ul', { class: 'ui-files__list' }, ...items) : note(empty));
-  const media = f.media.map((m) => item(m.name, [MEDIA_LABEL[m.kind](), formatSize(m.size), m.created ? tr('criado') : tr('alterado')].join(' · '), m.path));
+  const media = f.media.map((m) =>
+    item(
+      MEDIA_ICON[m.kind],
+      m.name,
+      [tr('Tipo: {0}', [MEDIA_LABEL[m.kind]()]), tr('Tamanho: {0}', [formatSize(m.size)]), tr('Modificado: {0}', [formatDateTime(m.at)]), tr('Ação: {0}', [m.created ? tr('criado') : tr('alterado')])],
+      m.path,
+    ),
+  );
   const dirs = f.outside.map((d) =>
-    item(d.path, [d.write && tr('escrita'), d.read && tr('leitura'), d.command && tr('comando')].filter(Boolean).join(', '), d.path),
+    item(
+      ICONS.folder,
+      d.path.split(/[\\/]/).filter(Boolean).pop() ?? d.path,
+      [
+        tr('Tipo: {0}', [tr('pasta')]),
+        !!d.at && tr('Modificado: {0}', [formatDateTime(d.at)]),
+        tr('Ação: {0}', [[d.write && tr('escrita'), d.read && tr('leitura'), d.command && tr('comando')].filter(Boolean).join(', ')]),
+      ],
+      d.path,
+    ),
   );
   return [
     group(tr('Mídia gravada ({0})', [media.length]), media, tr('Nenhuma mídia gravada nesta sessão.')),
@@ -299,6 +321,7 @@ class AgentView {
   private autoLink: HTMLButtonElement;
   private autoRetry: HTMLButtonElement;
   private autoLimit: HTMLSelectElement;
+  private autoSubs: HTMLInputElement;
   private filesSec: ReturnType<typeof section>;
   private filesBody: HTMLElement;
   private filesBtn: HTMLButtonElement;
@@ -445,11 +468,12 @@ class AgentView {
       {
         class: 'ui-day__select',
         attrs: { 'aria-label': tr('Limite de contexto') },
-        on: { change: () => this.last?.autonomy && void this.ctx.store.setAutonomy(this.last.id, { enabled: true, threshold: this.autoThreshold() }) },
+        on: { change: () => this.autoOptions() },
       },
       h('option', { text: tr('Limite: padrão'), attrs: { value: '' } }),
       ...[200, 300, 500].map((k) => h('option', { text: tr('Limite: {0} mil', [k]), attrs: { value: String(k * 1000) } })),
     ) as HTMLSelectElement;
+    this.autoSubs = h('input', { type: 'checkbox', on: { change: () => this.autoOptions() } }) as HTMLInputElement;
     // ▶ só na sessão que passou o trabalho adiante: abre o terminal dela, para consultar a conversa
     this.autoLink = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: tr('▶ Consultar esta sessão'), on: { click: () => this.id && (ctx.terminals ?? this.terminal).open(this.id) } }) as HTMLButtonElement;
     this.autoRetry = h('button', {
@@ -465,7 +489,8 @@ class AgentView {
         text: tr('Quando o contexto da sessão passa do limite, o Habblaud pede ao agente o prompt de continuidade e abre uma sessão nova nesta pasta. Atenção: manda mensagens e abre sessões sozinho, gastando tokens sem você por perto.'),
       }),
       this.autoState,
-      h('div', { class: 'ui-timeline__more' }, this.autoLimit, this.autoBtn, this.autoLink, this.autoRetry),
+      h('label', { class: 'ui-small' }, this.autoSubs, ' ', tr('Vigiar também os subagentes: avisa o agente quando um deles passa do limite, para trocá-lo por outro com um resumo.')),
+      h('div', { class: 'ui-auto__row' }, this.autoLimit, this.autoBtn, this.autoLink, this.autoRetry),
     );
 
     // Arquivos: só busca quando pedem (o servidor relê o transcript da sessão e dos subagentes).
@@ -547,10 +572,15 @@ class AgentView {
     const a = this.last;
     if (!a) return;
     this.autoBtn.disabled = true;
-    void this.ctx.store.setAutonomy(a.id, { enabled: !a.autonomy, threshold: this.autoThreshold() }).then((error) => {
+    void this.ctx.store.setAutonomy(a.id, { enabled: !a.autonomy, threshold: this.autoThreshold(), subs: this.autoSubs.checked }).then((error) => {
       this.autoBtn.disabled = false;
       if (error) setText(this.autoState, error);
     });
+  }
+
+  /** Com o modo ligado, trocar o limite ou a vigia dos subagentes já vale. */
+  private autoOptions(): void {
+    if (this.last?.autonomy) void this.ctx.store.setAutonomy(this.last.id, { enabled: true, threshold: this.autoThreshold(), subs: this.autoSubs.checked });
   }
 
   private autoThreshold(): number | undefined {
@@ -767,6 +797,7 @@ class AgentView {
     if (a.autonomy && document.activeElement !== this.autoLimit) {
       const v = String(a.autonomy.threshold);
       this.autoLimit.value = [...this.autoLimit.options].some((o) => o.value === v) ? v : '';
+      this.autoSubs.checked = !!a.autonomy.subs;
     }
 
     // Arquivos: mesma trava do terminal (mostra caminhos de fora do projeto).

@@ -162,7 +162,8 @@ export function summarize(touches: readonly Touch[], sessionStart: number): Touc
     // o `path` do Grep pode ser um arquivo: aí vale a pasta dele
     const dir = st?.isDirectory() || (t.dir && !st?.isFile()) ? t.path : dirname(t.path);
     if (dirname(dir) === dir) continue; // raiz do disco: não diz nada
-    const d = dirs.get(dir) ?? { path: dir, read: false, write: false, command: false, count: 0 };
+    const at = Number(stat(dir)?.mtimeMs) || undefined;
+    const d = dirs.get(dir) ?? { path: dir, read: false, write: false, command: false, count: 0, ...(at ? { at } : {}) };
     d[t.op] = true;
     d.count++;
     dirs.set(dir, d);

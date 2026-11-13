@@ -102,6 +102,10 @@ interface State {
   seen?: boolean;
   /** Limite deste agente (sem ele, vale o padrão). */
   threshold?: number;
+  /** Vigiar também os subagentes: avisa o principal quando um deles passa do limite. */
+  subs?: boolean;
+  /** Subagentes de que o principal já foi avisado (um aviso por subagente). */
+  warned?: string[];
 }
 
 export class Relay {
@@ -162,13 +166,13 @@ export class Relay {
   }
 
   /** Liga ou desliga o modo num agente principal. False = agente desconhecido ou que não pode (subagente, Codex). */
-  set(agentId: string, enabled: boolean, threshold?: number): boolean {
+  set(agentId: string, enabled: boolean, threshold?: number, subs?: boolean): boolean {
     const a = this.deps.agents().find((x) => x.id === agentId);
     if (!a || a.kind !== 'main' || a.provider === 'codex') return false;
     const s = this.states.get(agentId);
-    // já ligado e em andamento: só troca o limite
-    if (enabled && s && s.phase !== 'paused' && s.phase !== 'done') s.threshold = threshold;
-    else if (enabled) this.states.set(agentId, { phase: 'armed', relays: 0, at: 0, seenAt: this.now(), seen: true, threshold });
+    // já ligado e em andamento: só troca as opções
+    if (enabled && s && s.phase !== 'paused' && s.phase !== 'done') Object.assign(s, { threshold, subs });
+    else if (enabled) this.states.set(agentId, { phase: 'armed', relays: 0, at: 0, seenAt: this.now(), seen: true, threshold, subs });
     else this.states.delete(agentId);
     this.publish(agentId);
     this.save();
@@ -198,6 +202,7 @@ export class Relay {
       ...(s.note ? { note: s.note } : {}),
       ...(s.from ? { from: s.from } : {}),
       ...(s.next ? { next: s.next } : {}),
+      ...(s.subs ? { subs: true } : {}),
       ...(s.prompt && !s.next && (s.phase === 'paused' || s.phase === 'done') ? { retry: true } : {}),
     };
     this.deps.publish(id, view, notice);
@@ -230,8 +235,10 @@ export class Relay {
       s.seen = true;
       s.seenAt = now;
       try {
-        if (s.phase === 'armed') this.watch(id, s, a, now);
-        else if (s.phase === 'asked' || s.phase === 'cleaning') this.collect(id, s, a, all, now);
+        if (s.phase === 'armed') {
+          this.watch(id, s, a, now);
+          if (s.subs && s.phase === 'armed') this.watchSubs(id, s, a, all);
+        } else if (s.phase === 'asked' || s.phase === 'cleaning') this.collect(id, s, a, all, now);
       } catch (err) {
         this.pause(id, s, a, err instanceof Error ? err.message : String(err));
       }
@@ -257,6 +264,23 @@ export class Relay {
     s.at = now;
     delete s.note;
     this.publish(id, { level: 'info', text: tr('🔁 Modo autônomo: {0} passou de {1} mil tokens de contexto; pedi o prompt de continuidade.', [a.name, thousands(limit)]) });
+  }
+
+  /** Subagente com o contexto acima do limite: avisa o principal, uma vez por subagente. Quem troca o subagente é ele. */
+  private watchSubs(id: string, s: State, a: AgentInfo, all: readonly AgentInfo[]): void {
+    if (a.status === 'waiting') return;
+    const limit = this.limit(s);
+    for (const sub of all) {
+      const context = sub.stats.contextTokens ?? 0;
+      if (sub.parentId !== id || sub.status === 'done' || sub.status === 'offline' || context < limit || s.warned?.includes(sub.id)) continue;
+      const text = tr(
+        '[Habblaud · modo autônomo] O subagente {0} chegou a {1} mil tokens de contexto e cada turno dele está ficando caro. Quando ele chegar a um ponto seguro, peça a ele um resumo do que fez e do que falta, encerre-o e, se ainda houver trabalho, abra outro subagente com esse resumo. Não precisa responder a esta mensagem.',
+        [sub.name, thousands(context)],
+      );
+      if (!this.deps.send(id, text)) return;
+      (s.warned ??= []).push(sub.id);
+      this.publish(id, { level: 'info', text: tr('🔁 Modo autônomo: o subagente {0} passou de {1} mil tokens de contexto; avisei {2}.', [sub.name, thousands(limit), a.name]) });
+    }
   }
 
   private collect(id: string, s: State, a: AgentInfo, all: readonly AgentInfo[], now: number): void {
@@ -292,7 +316,7 @@ export class Relay {
     s.phase = 'done';
     delete s.note;
     s.next = next;
-    this.states.set(next, { phase: 'armed', relays, at: 0, seenAt: now, from: id, threshold: s.threshold });
+    this.states.set(next, { phase: 'armed', relays, at: 0, seenAt: now, from: id, threshold: s.threshold, subs: s.subs });
     this.publish(id, { level: 'success', text: tr('🔁 {0} passou o trabalho para uma sessão nova (revezamento {1} de {2}).', [a.name, relays, this.deps.maxRelays]) });
   }
 }
