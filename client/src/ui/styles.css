@@ -11148,17 +11148,16 @@ html.is-replay #world {
   display: none;
 }
 
-/* Gaveta › Arquivos: mídia gravada e pastas fora do repositório (clique copia o caminho). */
-.ui-files__list {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
+/* Gaveta › Modo autônomo: limite e botões numa linha, que quebra quando a gaveta é estreita. */
+.ui-auto__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
 }
-.ui-files__list li {
-  padding: 2px 0;
-  overflow-wrap: anywhere;
-  cursor: copy;
-}
+
+/* Gaveta › Arquivos: grades de ícones (mídia gravada e pastas fora do repositório), como uma pasta do computador. */
 .ui-files__group {
   margin-bottom: 8px;
 }
@@ -11167,28 +11166,61 @@ html.is-replay #world {
   font-weight: 600;
   padding: 4px 0;
 }
-.ui-files__group .ui-files__list {
-  max-height: 220px;
+/* as colunas acompanham a largura da gaveta; a altura mostra algumas linhas e o resto rola */
+.ui-files__list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 4px;
+  max-height: min(40vh, 300px);
   overflow-y: auto;
 }
-.ui-files__list li {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  cursor: default;
+.ui-files__tile {
+  position: relative;
+  min-width: 0;
+}
+.ui-files__tile > .ui-icon-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  opacity: 0;
+}
+.ui-files__tile:hover > .ui-icon-btn,
+.ui-files__tile > .ui-icon-btn:focus-visible,
+.ui-files__tile > .ui-icon-btn.is-done {
+  opacity: 1;
 }
 .ui-files__open {
-  flex: 1;
-  min-width: 0;
-  padding: 2px 4px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
   border: 0;
   border-radius: 4px;
   background: none;
   color: inherit;
   font: inherit;
-  text-align: left;
-  overflow-wrap: anywhere;
   cursor: pointer;
+}
+.ui-files__icon svg {
+  display: block;
+  width: 36px;
+  height: 36px;
+}
+.ui-files__name {
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .ui-files__open:hover,
 .ui-files__open:focus-visible {

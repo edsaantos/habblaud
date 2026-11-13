@@ -10,6 +10,7 @@ import type { CodexLive } from '../sources/codex/live';
 import type { SessionLookup } from '../sources/source';
 import { isJsonContentType, isLoopbackHost } from './guard';
 import type { RemoteFeature } from './remote';
+import { ptyRequestProblem } from './pty';
 import { handleSessionsRoute } from './sessions';
 import type { Hub } from './sse';
 import { handleStatsRoute } from './stats';
@@ -75,6 +76,8 @@ export interface ApiDeps {
   deliveries?: DeliveryIndex;
   /** Quem lê os arquivos das entregas (e, para o auxiliar do host, /api/host/files/*; deliveries/fetcher.ts). */
   files?: FileFetcher;
+  /** Liga/desliga o modo autônomo de um agente (POST /api/autonomy {agentId, enabled}; autonomy/relay.ts). False = agente que não pode. */
+  autonomy?: (agentId: string, op: { enabled: boolean; threshold?: number; subs?: boolean } | { retry: true }) => boolean;
   /** Arquivos de um agente (GET /api/agents/:id/files; files/touched.ts). Undefined = agente sem transcript. */
   touched?: (agentId: string) => Promise<TouchedFiles | undefined>;
   /** Abre no computador um item dessa lista (POST /api/agents/:id/files/open {path}). False = não está na lista. */
@@ -649,10 +652,27 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       }
       return true;
     }
+    if (path === '/api/autonomy') {
+      // Abre sessões e manda mensagens sozinho: como o terminal interativo, nunca pela porta remota.
+      if (method !== 'POST') methodNotAllowed(res, 'POST');
+      else if (!deps.autonomy) sendJson(res, 403, { error: tr('modo autônomo desligado: precisa das mensagens e do terminal interativo (HABBLAUD_PTY=1)') });
+      else if (!trusted(req) || ptyRequestProblem(req)) sendJson(res, 403, { error: denied(req, tr('o modo autônomo só é ligado pelo próprio computador (http://localhost)')) });
+      else
+        readJson(req)
+          .then((body) => {
+            const b = body as { agentId?: unknown; enabled?: unknown; threshold?: unknown; subs?: unknown; retry?: unknown };
+            if (typeof b?.agentId !== 'string' || (typeof b.enabled !== 'boolean' && b.retry !== true)) throw new HttpError(400, tr('esperado {agentId, enabled}'));
+            const threshold = typeof b.threshold === 'number' && b.threshold >= 50_000 && b.threshold <= 2_000_000 ? Math.floor(b.threshold) : undefined;
+            if (!deps.autonomy!(b.agentId, b.retry === true ? { retry: true } : { enabled: b.enabled === true, threshold, subs: b.subs === true })) throw new HttpError(404, tr('agente não encontrado'));
+            sendJson(res, 200, { ok: true });
+          })
+          .catch((err) => fail(res, err));
+      return true;
+    }
     if (path.startsWith('/api/agents/') && path.endsWith('/files/open')) {
       // Abre no computador um item da lista de arquivos do agente: nunca pela porta remota.
       if (method !== 'POST') methodNotAllowed(res, 'POST');
-      else if (!deps.openTouched || !trusted(req)) sendJson(res, 403, { error: denied(req, tr('os arquivos do agente só abrem pelo próprio computador (http://localhost)')) });
+      else if (!deps.openTouched || !trusted(req) || ptyRequestProblem(req)) sendJson(res, 403, { error: denied(req, tr('os arquivos do agente só abrem pelo próprio computador (http://localhost)')) });
       else
         readJson(req)
           .then(async (body) => {

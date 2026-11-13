@@ -12,10 +12,29 @@ do meio (0.**3**.0).
 
 ### Adicionado
 
+- **Modo autônomo: revezamento de sessões quando o contexto fica grande.** Ligado por agente principal na gaveta
+  (seção **Modo autônomo**). Quando o contexto da sessão passa do limite (`HABBLAUD_AUTONOMO_TOKENS`, padrão 200 mil
+  tokens), o Habblaud manda uma mensagem pedindo para concluir o que está em andamento, encerrar subagentes e
+  processos em segundo plano e devolver o prompt de continuidade; depois abre uma sessão nova na mesma pasta com esse
+  prompt, já com o modo ligado. A sessão antiga fica aberta e parada. Para sozinho depois de
+  `HABBLAUD_AUTONOMO_MAX` revezamentos seguidos (padrão 3), se algo continuar rodando em segundo plano ou se o agente
+  não responder em 30 minutos. Precisa das mensagens (plugin habblaud-mensagens) e de `HABBLAUD_PTY=1`. O limite
+  pode ser escolhido por agente na gaveta (padrão, 200, 300 ou 500 mil). O pedido espera o turno do agente acabar e
+  só interrompe um turno em curso com o contexto 50% acima do limite. A sessão nova começa conferindo a branch e as
+  alterações não commitadas contra o prompt. O estado do modo e cada prompt de continuidade ficam gravados em
+  `~/.habblaud/autonomy/`, então um reinício do Habblaud não perde a cadeia. Se a abertura falhar ou a sessão nova
+  não aparecer no escritório, a anterior recebe um aviso e o botão **Abrir a sessão nova** tenta de novo com o mesmo
+  prompt. O personagem da sessão antiga fica livre: passeia pelo escritório e cochila de vez em quando, e na gaveta
+  dele o botão **▶ Consultar esta sessão** abre o terminal da conversa. Opção **Vigiar também os subagentes**: quando
+  um subagente passa do limite, o agente principal recebe uma mensagem (uma por subagente) pedindo para trocá-lo por
+  outro com um resumo.
+- **Contexto atual** nas estatísticas do agente: o tamanho do contexto da sessão, que é o que encarece cada turno.
 - **Arquivos do agente na gaveta de detalhes.** A seção **Arquivos** lista a mídia (imagem, vídeo, áudio, PDF)
   gravada durante a sessão e as pastas acessadas fora do repositório (leitura, escrita ou comando), somando os
-  subagentes da sessão, em duas listas recolhíveis. Clique num item para abri-lo no computador (a pasta no
-  gerenciador de arquivos, a mídia no programa padrão) ou use o botão de copiar o caminho. Só no próprio computador.
+  subagentes da sessão, em duas grades recolhíveis de ícones, como uma pasta do computador: as colunas acompanham a
+  largura da gaveta e o que não cabe rola. Tipo, tamanho, data de modificação, ação e caminho aparecem ao parar o
+  mouse no item. Clique num item para abri-lo no computador (a pasta no gerenciador de arquivos, a mídia no programa
+  padrão) ou use o botão de copiar o caminho, que aparece no canto do item. Só no próprio computador.
 - **Teto de subagentes visíveis por sala** em Configurações › Escritório (5, 10, 15, 20 ou todos; padrão 10). Acima
   do teto, o subagente continua na lista lateral e entra na sala quando abrir vaga.
 

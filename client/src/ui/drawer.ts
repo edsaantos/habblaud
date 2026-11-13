@@ -75,27 +75,65 @@ function section(title: string, ...children: (Node | null)[]): { el: HTMLElement
   return { el, title: t, extra };
 }
 
+/** Situação do modo autônomo de um agente, numa linha. */
+export function autonomyLine(a: AgentInfo): string {
+  const m = a.autonomy;
+  if (!m) return tr('Desligado.');
+  const context = tr('contexto em {0} de {1}', [formatTokens(a.stats.contextTokens ?? 0), formatTokens(m.threshold)]);
+  const phase = {
+    armed: () => tr('Ligado: {0}.', [context]),
+    asked: () => tr('Pediu o prompt de continuidade; esperando a resposta do agente.'),
+    cleaning: () => tr('Pediu para encerrar o que roda em segundo plano.'),
+    done: () => tr('Passou o trabalho para uma sessão nova. Esta ficou parada.'),
+    paused: () => tr('Parado: {0}. Desligue e ligue para tentar de novo.', [m.note ?? '']),
+  }[m.phase]();
+  const note = m.phase === 'armed' && m.note ? ` ${m.note}.` : '';
+  return m.relays ? `${phase}${note} ${tr('Revezamentos desta cadeia: {0}.', [m.relays])}` : phase + note;
+}
+
 const MEDIA_LABEL: Record<MediaKind, () => string> = { image: () => tr('imagem'), video: () => tr('vídeo'), audio: () => tr('áudio'), pdf: () => 'PDF' };
 
+const MEDIA_ICON: Record<MediaKind, string> = { image: ICONS.fileImage, video: ICONS.fileVideo, audio: ICONS.fileAudio, pdf: ICONS.filePdf };
+
 /**
- * Duas listas recolhíveis, cada uma com a sua rolagem: mídia gravada e pastas fora do repositório.
- * O clique abre o item no computador (`open`); o caminho completo fica na dica e no botão de copiar.
+ * Duas grades recolhíveis, como uma pasta do computador (ícone e nome), cada uma com a sua rolagem: mídia gravada e
+ * pastas fora do repositório. O clique abre o item no computador (`open`); tipo, tamanho, data, ação e caminho
+ * aparecem ao parar o mouse em cima.
  */
 function filesView(f: TouchedFiles | null, open: (path: string) => void): HTMLElement[] {
   const note = (text: string) => h('p', { class: 'ui-muted ui-small', text });
   if (!f) return [note(tr('Não foi possível ler os arquivos deste agente.'))];
-  const item = (label: string, meta: string, path: string) =>
-    h(
+  const item = (icon: string, name: string, details: (string | false)[], path: string) => {
+    const pic = h('span', { class: 'ui-files__icon' });
+    pic.innerHTML = icon;
+    return h(
       'li',
-      {},
-      h('button', { class: 'ui-files__open', type: 'button', title: tr('Abrir no computador: {0}', [path]), on: { click: () => open(path) } }, h('span', { class: 'ui-mono-inline', text: label }), h('span', { class: 'ui-muted ui-small', text: ` · ${meta}` })),
+      { class: 'ui-files__tile' },
+      h('button', { class: 'ui-files__open', type: 'button', title: [name, ...details.filter(Boolean), path].join('\n'), on: { click: () => open(path) } }, pic, h('span', { class: 'ui-files__name', text: name })),
       copyButton(() => path, tr('Copiar caminho')),
     );
+  };
   const group = (title: string, items: HTMLElement[], empty: string) =>
     h('details', { class: 'ui-files__group', attrs: { open: '' } }, h('summary', { text: title }), items.length ? h('ul', { class: 'ui-files__list' }, ...items) : note(empty));
-  const media = f.media.map((m) => item(m.name, [MEDIA_LABEL[m.kind](), formatSize(m.size), m.created ? tr('criado') : tr('alterado')].join(' · '), m.path));
+  const media = f.media.map((m) =>
+    item(
+      MEDIA_ICON[m.kind],
+      m.name,
+      [tr('Tipo: {0}', [MEDIA_LABEL[m.kind]()]), tr('Tamanho: {0}', [formatSize(m.size)]), tr('Modificado: {0}', [formatDateTime(m.at)]), tr('Ação: {0}', [m.created ? tr('criado') : tr('alterado')])],
+      m.path,
+    ),
+  );
   const dirs = f.outside.map((d) =>
-    item(d.path, [d.write && tr('escrita'), d.read && tr('leitura'), d.command && tr('comando')].filter(Boolean).join(', '), d.path),
+    item(
+      ICONS.folder,
+      d.path.split(/[\\/]/).filter(Boolean).pop() ?? d.path,
+      [
+        tr('Tipo: {0}', [tr('pasta')]),
+        !!d.at && tr('Modificado: {0}', [formatDateTime(d.at)]),
+        tr('Ação: {0}', [[d.write && tr('escrita'), d.read && tr('leitura'), d.command && tr('comando')].filter(Boolean).join(', ')]),
+      ],
+      d.path,
+    ),
   );
   return [
     group(tr('Mídia gravada ({0})', [media.length]), media, tr('Nenhuma mídia gravada nesta sessão.')),
@@ -277,6 +315,13 @@ class AgentView {
   private tasksSec: ReturnType<typeof section>;
   private tasksBar: HTMLElement;
   private tasks: KeyedList<TaskItem>;
+  private autoSec: ReturnType<typeof section>;
+  private autoState: HTMLElement;
+  private autoBtn: HTMLButtonElement;
+  private autoLink: HTMLButtonElement;
+  private autoRetry: HTMLButtonElement;
+  private autoLimit: HTMLSelectElement;
+  private autoSubs: HTMLInputElement;
   private filesSec: ReturnType<typeof section>;
   private filesBody: HTMLElement;
   private filesBtn: HTMLButtonElement;
@@ -414,6 +459,40 @@ class AgentView {
     this.timelineSec = section(tr('Linha do tempo'), tl, h('div', { class: 'ui-timeline__more' }, this.timelineMore, this.timelineLess));
     this.timeline = new KeyedList<Activity>(tl, { key: (a) => a.id, create: createTimelineItem, update: (li, a) => updateTimelineItem(li, a, ctx.now()) });
 
+    // Modo autônomo: revezamento de sessões quando o contexto fica grande (server/autonomy/relay.ts).
+    this.autoState = h('p', { class: 'ui-small' });
+    this.autoBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', on: { click: () => this.toggleAutonomy() } }) as HTMLButtonElement;
+    // Limite por agente: vazio = o padrão do servidor (HABBLAUD_AUTONOMO_TOKENS). Com o modo ligado, trocar já vale.
+    this.autoLimit = h(
+      'select',
+      {
+        class: 'ui-day__select',
+        attrs: { 'aria-label': tr('Limite de contexto') },
+        on: { change: () => this.autoOptions() },
+      },
+      h('option', { text: tr('Limite: padrão'), attrs: { value: '' } }),
+      ...[200, 300, 500].map((k) => h('option', { text: tr('Limite: {0} mil', [k]), attrs: { value: String(k * 1000) } })),
+    ) as HTMLSelectElement;
+    this.autoSubs = h('input', { type: 'checkbox', on: { change: () => this.autoOptions() } }) as HTMLInputElement;
+    // ▶ só na sessão que passou o trabalho adiante: abre o terminal dela, para consultar a conversa
+    this.autoLink = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: tr('▶ Consultar esta sessão'), on: { click: () => this.id && (ctx.terminals ?? this.terminal).open(this.id) } }) as HTMLButtonElement;
+    this.autoRetry = h('button', {
+      class: 'ui-btn ui-btn--sm',
+      type: 'button',
+      text: tr('Abrir a sessão nova'),
+      on: { click: () => this.last && void this.ctx.store.setAutonomy(this.last.id, { retry: true }).then((error) => error && setText(this.autoState, error)) },
+    }) as HTMLButtonElement;
+    this.autoSec = section(
+      tr('Modo autônomo'),
+      h('p', {
+        class: 'ui-muted ui-small',
+        text: tr('Quando o contexto da sessão passa do limite, o Habblaud pede ao agente o prompt de continuidade e abre uma sessão nova nesta pasta. Atenção: manda mensagens e abre sessões sozinho, gastando tokens sem você por perto.'),
+      }),
+      this.autoState,
+      h('label', { class: 'ui-small' }, this.autoSubs, ' ', tr('Vigiar também os subagentes: avisa o agente quando um deles passa do limite, para trocá-lo por outro com um resumo.')),
+      h('div', { class: 'ui-auto__row' }, this.autoLimit, this.autoBtn, this.autoLink, this.autoRetry),
+    );
+
     // Arquivos: só busca quando pedem (o servidor relê o transcript da sessão e dos subagentes).
     this.filesBody = h('div', { class: 'ui-files' });
     this.filesBtn = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: tr('Mostrar'), on: { click: () => this.loadFiles() } }) as HTMLButtonElement;
@@ -426,6 +505,7 @@ class AgentView {
       ['tools', tr('Chamadas de ferramenta')],
       ['tokensIn', tr('Tokens de entrada')],
       ['tokensOut', tr('Tokens de saída')],
+      ['context', tr('Contexto atual')],
       ['cost', tr('Custo estimado')],
       ['lines', tr('Linhas'), h('span', { class: 'ui-lines' }, this.linesPlus, this.linesMinus)],
       ['subs', tr('Subagentes disparados')],
@@ -460,6 +540,7 @@ class AgentView {
       this.tasksSec.el,
       this.teamSec.el,
       this.timelineSec.el,
+      this.autoSec.el,
       this.filesSec.el,
       statsSec.el,
       this.codexHint,
@@ -485,6 +566,25 @@ class AgentView {
     this.filesBody.replaceChildren();
     setText(this.filesBtn, tr('Mostrar'));
     this.loadHistory();
+  }
+
+  private toggleAutonomy(): void {
+    const a = this.last;
+    if (!a) return;
+    this.autoBtn.disabled = true;
+    void this.ctx.store.setAutonomy(a.id, { enabled: !a.autonomy, threshold: this.autoThreshold(), subs: this.autoSubs.checked }).then((error) => {
+      this.autoBtn.disabled = false;
+      if (error) setText(this.autoState, error);
+    });
+  }
+
+  /** Com o modo ligado, trocar o limite ou a vigia dos subagentes já vale. */
+  private autoOptions(): void {
+    if (this.last?.autonomy) void this.ctx.store.setAutonomy(this.last.id, { enabled: true, threshold: this.autoThreshold(), subs: this.autoSubs.checked });
+  }
+
+  private autoThreshold(): number | undefined {
+    return Number(this.autoLimit.value) || undefined;
   }
 
   /** Mostra a lista (buscando de novo, então também atualiza) ou recolhe a que está aberta. */
@@ -686,6 +786,20 @@ class AgentView {
     setText(this.tasksSec.extra, `${tp.completed}/${tp.total}`);
     this.tasks.sync(a.tasks);
 
+    // Modo autônomo: só principais do Claude Code, com as mensagens e o terminal interativo ligados e pelo computador.
+    const meta = this.ctx.store.snapshot?.meta;
+    setHidden(this.autoSec.el, this.ctx.store.mock || a.kind !== 'main' || a.provider === 'codex' || !meta?.messages || !meta.pty?.enabled || access().remote);
+    setText(this.autoBtn, a.autonomy ? tr('Desligar') : tr('Ligar'));
+    if (!this.autoBtn.disabled) setText(this.autoState, autonomyLine(a));
+    setHidden(this.autoLink, a.autonomy?.phase !== 'done');
+    setHidden(this.autoRetry, !a.autonomy?.retry);
+    // ligado: o seletor mostra o limite em vigor (se for um dos da lista); desligado: fica a escolha de quem vai ligar
+    if (a.autonomy && document.activeElement !== this.autoLimit) {
+      const v = String(a.autonomy.threshold);
+      this.autoLimit.value = [...this.autoLimit.options].some((o) => o.value === v) ? v : '';
+      this.autoSubs.checked = !!a.autonomy.subs;
+    }
+
     // Arquivos: mesma trava do terminal (mostra caminhos de fora do projeto).
     setHidden(this.filesSec.el, this.ctx.store.mock || !this.ctx.store.snapshot?.meta.terminal || !access().terminal);
 
@@ -795,6 +909,7 @@ class AgentView {
     st.set('tools', formatInt(s.toolCalls));
     st.set('tokensIn', formatTokens(s.tokensIn));
     st.set('tokensOut', formatTokens(s.tokensOut));
+    st.set('context', s.contextTokens ? formatTokens(s.contextTokens) : null);
     st.set('cost', s.costUSD !== undefined ? formatUSD(s.costUSD) : null);
     const codex = providerOf(a) === 'codex';
     const hasLines = s.linesAdded !== undefined || s.linesRemoved !== undefined;
@@ -816,7 +931,7 @@ class AgentView {
   }
 }
 
-type StatKey = 'tools' | 'tokensIn' | 'tokensOut' | 'cost' | 'lines' | 'subs' | 'model' | 'branch' | 'perm' | 'session' | 'start' | 'duration' | 'bg';
+type StatKey = 'tools' | 'tokensIn' | 'tokensOut' | 'context' |'cost' | 'lines' | 'subs' | 'model' | 'branch' | 'perm' | 'session' | 'start' | 'duration' | 'bg';
 
 /** Lista chave/valor de linhas fixas: cada linha é criada uma vez e só tem o texto/visibilidade atualizados. */
 class KvList<K extends string> {

@@ -53,8 +53,9 @@ describe('arquivos do agente', () => {
     expect(f.media.find((m) => m.name === 'video.mp4')).toMatchObject({ kind: 'video', size: 2 });
     // subir até a raiz do repositório (.git) não conta como fora; o que não existe no disco some
     const saida = { path: join(out, 'saida'), read: false, write: false, command: true, count: 1 };
-    expect(f.outside).toEqual([{ path: out, read: false, write: true, command: true, count: 2 }, saida]);
-    expect((await touchedFiles(transcript, false)).outside).toEqual([{ path: out, read: false, write: false, command: true, count: 1 }, saida]);
+    expect(f.outside[0].at).toBeGreaterThan(0);
+    expect(f.outside).toMatchObject([{ path: out, read: false, write: true, command: true, count: 2 }, saida]);
+    expect((await touchedFiles(transcript, false)).outside).toMatchObject([{ path: out, read: false, write: false, command: true, count: 1 }, saida]);
     tmp.cleanup?.();
   });
 });

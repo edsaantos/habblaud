@@ -120,11 +120,35 @@ export interface AgentStats {
   /** input + cache read + cache creation. */
   tokensIn: number;
   tokensOut: number;
+  /** Tamanho do contexto agora: a entrada (com cache) da última resposta. É o que encarece cada turno. */
+  contextTokens?: number;
   costUSD?: number;
   linesAdded?: number;
   linesRemoved?: number;
   /** Total de subagentes disparados por este agente. */
   subagents: number;
+}
+
+/**
+ * Modo autônomo de um agente principal: quando o contexto passa do limite, o Habblaud pede o prompt de continuidade
+ * e abre uma sessão nova na mesma pasta. armed = de olho no contexto; asked = pediu o prompt; cleaning = pediu para
+ * encerrar o que roda em segundo plano; done = passou o trabalho adiante; paused = parou (o motivo está em `note`).
+ */
+export interface AgentAutonomy {
+  phase: 'armed' | 'asked' | 'cleaning' | 'done' | 'paused';
+  /** Quantos revezamentos esta cadeia de sessões já fez. */
+  relays: number;
+  /** Limite de contexto, em tokens. */
+  threshold: number;
+  note?: string;
+  /** Id do agente da sessão anterior da cadeia (de quem esta recebeu o trabalho). */
+  from?: string;
+  /** Id do agente da sessão nova (para quem esta passou o trabalho). */
+  next?: string;
+  /** Dá para abrir a sessão nova de novo com o prompt já recebido (a abertura falhou ou ela não apareceu). */
+  retry?: boolean;
+  /** Vigia também os subagentes (avisa o principal quando um deles passa do limite). */
+  subs?: boolean;
 }
 
 export interface AgentInfo {
@@ -176,6 +200,8 @@ export interface AgentInfo {
   custom?: true;
   /** Subagente rodando em segundo plano. */
   background?: boolean;
+  /** Modo autônomo ligado neste agente (server/autonomy/relay.ts). Ausente = desligado. */
+  autonomy?: AgentAutonomy;
   /**
    * Pedido de permissão que dá para responder pelo Habblaud (hook PermissionRequest; o mais antigo, se
    * houver vários). Enquanto existe, o agente aparece como 'waiting'. Ver PermissionRequestInfo.
@@ -447,7 +473,7 @@ export interface TouchedFiles {
   /** Mídia gravada durante a sessão, da mais recente para a mais antiga. */
   media: { path: string; name: string; kind: MediaKind; size: number; at: number; /** Criada na sessão (senão, alterada). */ created: boolean }[];
   /** Pastas fora do repositório: lidas, escritas ou citadas em comandos (`count` = quantas vezes). */
-  outside: { path: string; read: boolean; write: boolean; command: boolean; count: number }[];
+  outside: { path: string; read: boolean; write: boolean; command: boolean; count: number; /** Data de modificação da pasta. */ at?: number }[];
 }
 
 // ------------------------------------------------------------------ mod do Claude Code

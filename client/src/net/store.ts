@@ -182,6 +182,14 @@ export class OfficeStore {
     return res?.ok ? ((await res.json()) as TouchedFiles) : null;
   }
 
+  /** Liga/desliga o modo autônomo de um agente principal. Devolve a mensagem de erro, se houver. */
+  async setAutonomy(agentId: string, op: { enabled: boolean; threshold?: number; subs?: boolean } | { retry: true }): Promise<string | undefined> {
+    const res = await fetch('/api/autonomy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, ...op }) }).catch(() => null);
+    if (res?.ok) return undefined;
+    const data = (await res?.json().catch(() => null)) as { error?: unknown } | null;
+    return typeof data?.error === 'string' ? data.error : tr('Sem conexão com o Habblaud.');
+  }
+
   /** Abre no computador (gerenciador de arquivos ou programa padrão) um item da lista de arquivos do agente. */
   async openAgentFile(id: string, path: string): Promise<boolean> {
     const res = await fetch(`/api/agents/${encodeURIComponent(id)}/files/open`, {

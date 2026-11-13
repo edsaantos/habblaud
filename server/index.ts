@@ -51,6 +51,7 @@ import { createWhisperTranscriber, findWhisper } from './dictation/whisper';
 import { DeliveryIndex } from './deliveries/deliveries';
 import { FileFetcher } from './deliveries/fetcher';
 import { listed, openInSystem, touchedFiles } from './files/touched';
+import { lastAssistantText, Relay } from './autonomy/relay';
 import { WorldClient } from './world/client';
 import { createWorldRoutes } from './world/http';
 import { WorldService } from './world/service';
@@ -322,6 +323,33 @@ const ptys = spawnPty
 late.ptys = ptys;
 late.ptyOff = ptyOff;
 
+// Modo autônomo (autonomy/relay.ts): precisa das mensagens (para pedir o prompt de continuidade) e do terminal
+// interativo (para abrir a sessão nova). Limite de contexto e teto de revezamentos seguidos pelo ambiente.
+const positive = (v: string | undefined, fallback: number) => (Number(v) > 0 ? Math.floor(Number(v)) : fallback);
+const relay =
+  messages && ptys
+    ? new Relay({
+        agents: () => office.list(),
+        send: (agentId, text) => 'message' in messages.send({ agentId, text }),
+        lastReply: (id, since) => {
+          const path = agents.transcriptPathOf(id);
+          return path ? lastAssistantText(path, since) : undefined;
+        },
+        launch: (a, prompt) => {
+          const cwd = office.roomPath(a.roomId);
+          if (!cwd) throw new Error(tr('pasta do agente desconhecida'));
+          // a sessão nova herda o modo de permissão só se for um dos que trabalham sozinhos sem liberar tudo
+          const permissionMode = a.permissionMode === 'auto' || a.permissionMode === 'acceptEdits' ? a.permissionMode : undefined;
+          return ptys.createWithPrompt({ cwd, account: a.account, prompt, permissionMode }).agentId;
+        },
+        publish: (id, autonomy, notice) => office.setAutonomy(id, autonomy, notice),
+        threshold: positive(process.env.HABBLAUD_AUTONOMO_TOKENS, 200_000),
+        maxRelays: positive(process.env.HABBLAUD_AUTONOMO_MAX, 3),
+        dir: join(config.dataDir, 'autonomy'),
+      })
+    : undefined;
+relay?.start();
+
 if (config.demo) office.setDemo(true);
 // As fontes síncronas (a do Claude Code) terminam o boot aqui, antes de o hub começar a transmitir.
 void agents.start();
@@ -370,6 +398,7 @@ const api = createApiHandler({
   dictation,
   deliveries,
   files: deliveryFiles,
+  autonomy: relay ? (agentId, op) => ('retry' in op ? relay.retry(agentId) : relay.set(agentId, op.enabled, op.threshold, op.subs)) : undefined,
   touched: config.terminal ? touchedOf : undefined,
   // No Docker o servidor não enxerga a área de trabalho do computador: não há o que abrir.
   openTouched:
