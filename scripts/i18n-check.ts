@@ -21,7 +21,9 @@ export function collectKeys(root = ROOT): Map<string, string[]> {
       if (statSync(p).isDirectory()) {
         if (name !== 'node_modules' && name !== 'dist' && name !== 'locales') walk(p);
       } else if (p.endsWith('.ts') && !p.endsWith('.test.ts') && name !== 'i18n-check.ts') {
-        const src = readFileSync(p, 'utf8');
+        // CRLF (checkout Windows) vira LF, como o JavaScript faz ao ler uma template string de várias linhas:
+        // sem isso a chave daqui saía com "\r\n" e não batia com a do dicionário.
+        const src = readFileSync(p, 'utf8').replaceAll('\r\n', '\n');
         for (const m of src.matchAll(re)) {
           const key = unescapeJs(m[2]);
           const line = src.slice(0, m.index).split('\n').length;
