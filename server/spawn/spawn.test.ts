@@ -162,7 +162,8 @@ describe('novo agente em segundo plano (claude --bg)', () => {
     expect(cliArgs({ folder: '/p', prompt: '  ' })).toEqual(['--bg', '-n', 'Habblaud']);
   });
 
-  it('createCliRunner roda o binário na pasta, sem shell, e lê o id; erro vira a 1ª linha', async () => {
+  // O binário de mentira é um script #!/bin/sh, que o Windows não executa.
+  it.skipIf(process.platform === 'win32')('createCliRunner roda o binário na pasta, sem shell, e lê o id; erro vira a 1ª linha', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hb-spawn-'));
     const bin = join(dir, 'claude');
     writeFileSync(
