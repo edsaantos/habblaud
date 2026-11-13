@@ -70,6 +70,11 @@ do meio (0.**3**.0).
   ficou offline.
 - **Modo demonstração só liga pelo próprio computador.** Com `HABBLAUD_HOST=0.0.0.0`, outro aparelho da rede
   conseguia ligar ou desligar a demonstração.
+- **`npm run demo` roda no Windows.** O script usava `HABBLAUD_DEMO=1 npm run dev`, que o `cmd.exe` não entende;
+  agora é `npm run dev -- --demo` (a variável `HABBLAUD_DEMO=1` continua valendo).
+- **`npm run remote:setup` em Linux com o `/tmp` em outro sistema de arquivos** (tmpfs no Fedora, Arch e Debian
+  recente): a CA e o certificado eram criados na pasta temporária e movidos com um `rename` que falhava (`EXDEV`).
+  Agora são criados dentro de `~/.habblaud/remote-tls`.
 - **Cartão de permissão: o pedido seguinte não chega com os botões já ativos.** Com vários pedidos na fila, o
   cartão trocava para o próximo no mesmo instante em que o anterior era respondido, e um clique mirado no primeiro
   podia aprovar o segundo sem leitura. Os botões agora ficam parados por 0,7 s depois da troca.

@@ -17,7 +17,7 @@
 import { spawnSync } from 'node:child_process';
 import { randomBytes, X509Certificate } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { hostname, networkInterfaces, tmpdir } from 'node:os';
+import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { tr } from '../../shared/i18n';
 
@@ -152,6 +152,16 @@ function openssl(run: Run, args: string[]): void {
   if (r.status !== 0) throw new Error(tr('openssl {0} falhou: {1}', [args[0], String(r.stderr).trim().split('\n').slice(-2).join(' ')]));
 }
 
+/**
+ * Pasta de trabalho do openssl, dentro de `paths.base` (700) e não na pasta temporária do sistema: os arquivos prontos
+ * vão para o lugar com rename, que não atravessa sistemas de arquivos (com o /tmp em tmpfs dava EXDEV).
+ */
+function workDir(paths: TlsPaths, name: string): string {
+  const work = join(paths.base, `.work-${name}-${randomBytes(6).toString('hex')}`);
+  mkdirSync(work, { mode: 0o700 });
+  return work;
+}
+
 function ensureDir(dir: string, mode: number): void {
   mkdirSync(dir, { recursive: true, mode });
   chmodSync(dir, mode);
@@ -198,8 +208,7 @@ export function ensureCa(paths: TlsPaths, label: string, run: Run = spawnSync, d
   ensureDir(paths.base, 0o700);
   ensureDir(paths.caDir, 0o700);
   const dns = caDomains(domains);
-  const work = join(tmpdir(), `habblaud-ca-${randomBytes(6).toString('hex')}`);
-  mkdirSync(work, { mode: 0o700 });
+  const work = workDir(paths, 'ca');
   try {
     const cnf = join(work, 'ca.cnf');
     writeFileSync(
@@ -237,8 +246,7 @@ export function ensureCa(paths: TlsPaths, label: string, run: Run = spawnSync, d
 export function issueServerCert(paths: TlsPaths, targets: CertTargets, run: Run = spawnSync): void {
   if (!existsSync(paths.caKey) || !existsSync(paths.caCert)) throw new Error(tr('a CA local não existe: rode npm run remote:setup'));
   ensureDir(paths.serverDir, 0o755);
-  const work = join(tmpdir(), `habblaud-cert-${randomBytes(6).toString('hex')}`);
-  mkdirSync(work, { mode: 0o700 });
+  const work = workDir(paths, 'cert');
   try {
     const key = join(work, 'server.key');
     const csr = join(work, 'server.csr');
