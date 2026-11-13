@@ -5,9 +5,11 @@ import { describe, expect, it } from 'vitest';
 import {
   cliArgs,
   createCliRunner,
+  createOpener,
   folderProblem,
   HOST_PRESENCE_MS,
   launch,
+  openerCommand,
   parseSpawn,
   QUEUED_TIMEOUT_MS,
   SENT_TIMEOUT_MS,
@@ -180,6 +182,19 @@ describe('novo agente em segundo plano (claude --bg)', () => {
     expect(realpathSync(args[0])).toBe(realpathSync(dir));
     expect(args.slice(1)).toEqual(['--bg', '-n', 'Habblaud: faça $(rm -rf x) && y', '--', 'faça $(rm -rf x) && y']);
     expect(await run({ folder: tmpdir(), prompt: 'oi' })).toEqual({ ok: false, error: 'Workspace not trusted. Run claude once' });
+  });
+
+  it('abrir o link do app: sem shell em nenhum sistema (no Windows o cmd cortaria o link no "&")', () => {
+    expect(openerCommand('win32')).toEqual(['rundll32', ['url.dll,FileProtocolHandler']]);
+    expect(openerCommand('darwin')).toEqual(['open', []]);
+    expect(openerCommand('linux')).toEqual(['xdg-open', []]);
+    // o link vai num argumento só e sem nada que o Windows precise pôr entre aspas
+    expect(spawnUrl({ folder: 'C:\\Meus Projetos\\loja', prompt: 'rode "a" & b | c > d %PATH%' })).toMatch(/^claude:\/\/code\/new\?folder=[\w%.:-]+&q=[\w%.-]+&source=habblaud$/);
+  });
+
+  // O rundll32 devolve sucesso mesmo sem programa para o link; a pergunta ao registro vem antes (e nada é aberto).
+  it.skipIf(process.platform !== 'win32')('Windows: link de um protocolo sem programa registrado é erro, não "abriu"', async () => {
+    expect(await createOpener()('habblaud-nao-existe://code/new?folder=X&q=y')).toEqual({ ok: false, error: 'nenhum programa neste computador abre links habblaud-nao-existe://' });
   });
 
   it('launch: roda em segundo plano; se não der, abre o app e diz por quê', async () => {

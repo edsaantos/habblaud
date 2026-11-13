@@ -156,6 +156,10 @@ export function summarize(touches: readonly Touch[], sessionStart: number): Touc
     }
   };
   for (const t of touches) {
+    // Pasta de rede (\\servidor\pasta) fica de fora: conferir um servidor que não responde segura o statSync por
+    // uns 20 s (medido no Windows), e o servidor inteiro fica parado junto.
+    // shortcut: unidade mapeada ou pasta montada que caiu ainda trava; trocar por stat assíncrono com prazo se acontecer
+    if (/^[\\/]{2}/.test(t.path)) continue;
     const st = extname(t.path).toLowerCase() in MEDIA || t.guess || t.dir ? stat(t.path) : null;
     addMedia(t.path);
     const broad = [repoRoot(t.cwd), homedir(), tmpdir()].some((p) => !outside(p, t.path)); // contém o repositório, a pasta do usuário ou a temporária

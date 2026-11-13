@@ -1006,7 +1006,7 @@ metadata (letter, email, organization) is read on the host by `docker:up` and pa
   allow only what you need. The CA key stays in `~/.habblaud/remote-tls/ca` and never goes into the container.
 - **New agent, opt-in:** with `HABBLAUD_PTY=1`, the office starts Claude Code sessions with the request you wrote, in
   the folder you choose — the same warning as the interactive terminal applies. Attachments are written to
-  `~/.habblaud/attachments/` (folder 700, files 600). In Docker, whoever starts the sessions is the host helper
+  `~/.habblaud/attachments/` (folder 700, files 600) and Habblaud never deletes them: clear that folder yourself when you no longer need them. In Docker, whoever starts the sessions is the host helper
   (`npm run codex:bridge`), which also reads the delivery files only from known project folders (the ones Claude Code
   has in `<conta>/projects`), the temporary folder and the attachments.
 - **Character editor, local only:** saving or going back to random changes the office and writes to `names.json`, so it
