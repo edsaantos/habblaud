@@ -183,6 +183,12 @@ interface AskRefs {
 const DONE: Record<PermissionDecision['behavior'], string> = { allow: tr('Aprovado'), deny: tr('Recusado'), answer: tr('Respondido'), terminal: tr('Devolvido ao terminal') };
 
 /**
+ * Um agente pode ter vários pedidos na fila: quando o cartão troca de pedido (o anterior foi respondido ou expirou),
+ * os botões ficam parados esse tempo, para um clique mirado no pedido anterior não aprovar o seguinte sem leitura.
+ */
+export const SWAP_GUARD_MS = 700;
+
+/**
  * Cartão "Pede permissão" (ou "Pergunta para você", no AskUserQuestion) na gaveta do agente. Some quando o
  * pedido é respondido (por aqui ou no terminal), expira ou o agente sai.
  */
@@ -191,6 +197,9 @@ export class PermissionCard {
   private id = '';
   private agentId = '';
   private phase: Phase = 'idle';
+  /** Quando o pedido anterior saiu do cartão, e até quando os botões do pedido novo ficam parados (SWAP_GUARD_MS). */
+  private lastGoneAt = 0;
+  private readyAt = 0;
   private detailReq = 0;
   private detail: PermissionRequestInfo | null = null;
   private pendingFocus: string | null = null;
@@ -413,6 +422,11 @@ export class PermissionCard {
 
   private reset(id: string, agentId: string): void {
     if (id === this.id && agentId === this.agentId) return;
+    const now = Date.now();
+    if (this.id) this.lastGoneAt = now;
+    this.readyAt = id ? this.lastGoneAt + SWAP_GUARD_MS : 0;
+    // Solta os botões no fim da espera (sem snapshot novo, nada redesenharia o cartão).
+    if (this.readyAt > now) setTimeout(() => this.ctx.invalidate(), this.readyAt - now + 20);
     this.id = id;
     this.agentId = agentId;
     this.phase = 'idle';
@@ -486,9 +500,9 @@ export class PermissionCard {
     return this.ctx.store.mock || access().permissions;
   }
 
-  /** Sem como responder agora: enviando, já respondido ou página aberta de fora do computador. */
+  /** Sem como responder agora: enviando, já respondido, pedido recém-trocado ou página aberta de fora do computador. */
   private isBusy(): boolean {
-    return this.phase === 'sending' || this.phase === 'sent' || !this.isLocal();
+    return this.phase === 'sending' || this.phase === 'sent' || Date.now() < this.readyAt || !this.isLocal();
   }
 
   // ---------------------------------------------------------------- perguntas (AskUserQuestion)

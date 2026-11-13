@@ -313,7 +313,7 @@ export function waitRows(waits: readonly WaitDayStats[], clock: (t: number) => s
       account: w.account,
       when,
       ongoing: !!w.ongoing,
-      label: `${i + 1}º: ${formatAgentTime(w.ms)}, ${w.agentName} em ${w.roomName}, ${when}${w.reason ? tr(', para {0}', [w.reason]) : ''}${w.ongoing ? tr(', ainda esperando') : ''}`,
+      label: `${i + 1}º: ${formatAgentTime(w.ms)}, ${tr('{0} em {1}', [w.agentName, w.roomName])}, ${when}${w.reason ? tr(', para {0}', [w.reason]) : ''}${w.ongoing ? tr(', ainda esperando') : ''}`,
     };
     if (w.reason) row.reason = w.reason;
     return row;

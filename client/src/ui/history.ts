@@ -291,7 +291,7 @@ export class HistoryPopover implements UiComponent {
     setHidden(this.retryBtn, this.state !== 'error');
     setText(
       this.footEl,
-      this.sessions.length ? (q ? `${shown.length} de ${plural(this.sessions.length, tr('sessão'), tr('sessões'))}` : plural(this.sessions.length, tr('sessão'), tr('sessões'))) : '',
+      this.sessions.length ? (q ? tr('{0} de {1}', [shown.length, plural(this.sessions.length, tr('sessão'), tr('sessões'))]) : plural(this.sessions.length, tr('sessão'), tr('sessões'))) : '',
     );
     setHidden(this.footEl, !this.sessions.length);
 
