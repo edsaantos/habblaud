@@ -93,7 +93,9 @@ export function autonomyLine(a: AgentInfo): string {
 
 const MEDIA_LABEL: Record<MediaKind, () => string> = { image: () => tr('imagem'), video: () => tr('vídeo'), audio: () => tr('áudio'), pdf: () => 'PDF' };
 
-const MEDIA_ICON: Record<MediaKind, string> = { image: ICONS.fileImage, video: ICONS.fileVideo, audio: ICONS.fileAudio, pdf: ICONS.filePdf };
+// Os emojis que o escritório já usa nas atividades (shared/activity.ts): 🖼️ olhar uma imagem, 📕 ler um PDF, 📂 explorar
+// pastas. Vídeo e áudio não têm atividade própria: 🎬 e 🎵 vêm do mesmo conjunto (emoji do sistema).
+const MEDIA_ICON: Record<MediaKind, string> = { image: '🖼️', video: '🎬', audio: '🎵', pdf: '📕' };
 
 /**
  * Duas grades recolhíveis, como uma pasta do computador (ícone e nome), cada uma com a sua rolagem: mídia gravada e
@@ -104,8 +106,7 @@ function filesView(f: TouchedFiles | null, open: ((path: string) => void) | null
   const note = (text: string) => h('p', { class: 'ui-muted ui-small', text });
   if (!f) return [note(tr('Não foi possível ler os arquivos deste agente.'))];
   const item = (icon: string, name: string, details: (string | false)[], path: string) => {
-    const pic = h('span', { class: 'ui-files__icon' });
-    pic.innerHTML = icon;
+    const pic = h('span', { class: 'ui-files__icon', text: icon, attrs: { 'aria-hidden': 'true' } });
     return h(
       'li',
       { class: 'ui-files__tile' },
@@ -125,7 +126,7 @@ function filesView(f: TouchedFiles | null, open: ((path: string) => void) | null
   );
   const dirs = f.outside.map((d) =>
     item(
-      ICONS.folder,
+      '📂',
       d.path.split(/[\\/]/).filter(Boolean).pop() ?? d.path,
       [
         tr('Tipo: {0}', [tr('pasta')]),

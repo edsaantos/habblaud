@@ -11212,10 +11212,9 @@ html.is-replay #world {
   font: inherit;
   cursor: pointer;
 }
-.ui-files__icon svg {
-  display: block;
-  width: 36px;
-  height: 36px;
+.ui-files__icon {
+  font-size: 30px;
+  line-height: 36px;
 }
 .ui-files__name {
   max-width: 100%;
